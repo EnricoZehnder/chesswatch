@@ -16,7 +16,11 @@ const MIME = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.txt': 'text/plain; charset=utf-8',
+  '.wav': 'audio/wav',
 };
+
+// Move sounds may play without a click first, like a normal app.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
