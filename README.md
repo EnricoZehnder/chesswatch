@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Chesswatch: watch Stockfish 19 play against itself" width="100%">
+  <img src="docs/banner.png" alt="Chesswatch: watch Stockfish 6 to 19 play against each other" width="100%">
 </p>
 
 <p align="center">
