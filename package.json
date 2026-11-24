@@ -1,0 +1,95 @@
+{
+  "name": "chesswatch",
+  "productName": "Chesswatch",
+  "version": "1.0.0",
+  "description": "Watch Stockfish 19 play against itself",
+  "main": "desktop/main.js",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "author": "EnricoZehnder",
+  "homepage": "https://github.com/EnricoZehnder/chesswatch",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EnricoZehnder/chesswatch.git"
+  },
+  "scripts": {
+    "web": "python3 -m http.server 8000 --directory web",
+    "desktop": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "ios:sync": "cap sync ios"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/ios": "8.6.2",
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "app.chesswatch",
+    "productName": "Chesswatch",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "desktop/**",
+      "web/**",
+      "package.json"
+    ],
+    "icon": "build/icon.png",
+    "artifactName": "Chesswatch-${version}-${os}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "Chesswatch-${version}-Windows-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Chesswatch-${version}-Windows-Setup.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.games",
+      "identity": "-",
+      "artifactName": "Chesswatch-${version}-macOS.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game",
+      "artifactName": "Chesswatch-${version}-Linux-${arch}.${ext}",
+      "desktop": {
+        "entry": {
+          "Name": "Chesswatch",
+          "Comment": "Watch Stockfish 19 play against itself"
+        }
+      }
+    }
+  }
+}

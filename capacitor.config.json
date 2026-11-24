@@ -1,0 +1,9 @@
+{
+  "appId": "app.chesswatch",
+  "appName": "Chesswatch",
+  "webDir": "web",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0f1411"
+  }
+}

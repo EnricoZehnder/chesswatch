@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chesswatch</title>
+<meta name="description" content="Watch Stockfish 19 play against itself, live in your browser.">
+<meta name="theme-color" content="#0f1411">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Chesswatch">
+<meta property="og:description" content="Watch Stockfish 19 play against itself, live in your browser.">
+<meta property="og:image" content="https://enricozehnder.github.io/chesswatch/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500;700&display=swap">
+<link rel="stylesheet" href="vendor/pieces.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Chesswatch</h1>
+    <p class="tagline"><span id="engineName">Stockfish 19</span> against itself, live in your browser</p>
+  </div>
+  <div class="status" id="status" data-state="loading" role="status" aria-live="polite">
+    <span class="sdot" aria-hidden="true"></span><span class="stext">Loading engine</span>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="stage" aria-label="Board">
+    <div class="player" id="playerB" data-side="b">
+      <span class="swatch" aria-hidden="true"></span>
+      <div class="pinfo"><span class="pname">Stockfish 19</span><span class="pstr">Full strength</span></div>
+      <span class="pmat"></span>
+      <div class="clock"><span class="clabel">Used</span><span class="ctime">0:00</span></div>
+    </div>
+
+    <div class="board-row">
+      <div class="evalbar" id="evalBar" role="img" aria-label="Evaluation">
+        <div class="evalfill" id="evalFill"></div>
+        <span class="evalnum" id="evalNum">0.0</span>
+      </div>
+      <div class="board-wrap">
+        <div class="board" id="board" role="grid" aria-label="Chessboard"></div>
+        <div class="result" id="result" hidden>
+          <div class="rcard">
+            <p class="rscore" id="resultScore">1 – 0</p>
+            <p class="rwinner" id="resultWinner">White wins</p>
+            <p class="rreason" id="resultReason">Checkmate</p>
+            <p class="rnext" id="resultNext"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="player" id="playerW" data-side="w">
+      <span class="swatch" aria-hidden="true"></span>
+      <div class="pinfo"><span class="pname">Stockfish 19</span><span class="pstr">Full strength</span></div>
+      <span class="pmat"></span>
+      <div class="clock"><span class="clabel">Used</span><span class="ctime">0:00</span></div>
+    </div>
+
+    <div class="review" id="reviewBar" hidden>
+      <span>Reviewing: <strong id="reviewText"></strong></span>
+      <button type="button" class="btn small" id="btnLive">Back to live</button>
+    </div>
+
+    <div class="controls">
+      <button type="button" class="btn primary" id="btnPlay" disabled>Start</button>
+      <button type="button" class="btn" id="btnStep" disabled title="Let Stockfish play exactly one move (Enter)">Next move</button>
+      <button type="button" class="btn" id="btnNew">New game</button>
+      <div class="navbtns">
+        <button type="button" class="btn icon" id="btnPrev" aria-label="Previous move" title="Previous move (←)">‹</button>
+        <button type="button" class="btn icon" id="btnNext" aria-label="Next move" title="Next move (→)">›</button>
+      </div>
+      <button type="button" class="btn" id="btnFlip" title="Flip board (F)">Flip board</button>
+      <button type="button" class="btn" id="btnPgn">Copy PGN</button>
+    </div>
+    <div class="pgn" id="pgnWrap" hidden>
+      <label for="pgnBox" class="label">PGN</label>
+      <textarea id="pgnBox" rows="6" readonly></textarea>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="panel opening-panel">
+      <h2 class="label">Opening</h2>
+      <p class="opening"><span class="eco" id="openingEco">—</span> <span id="openingName">Start position</span></p>
+    </section>
+
+    <section class="panel think" id="thinkBody" data-side="">
+      <h2 class="label"><span class="tdot" aria-hidden="true"></span><span id="thinkWho">Waiting for the next move</span></h2>
+      <dl class="stats">
+        <div class="stat big"><dt>Eval</dt><dd id="thinkEval">–</dd></div>
+        <div class="stat"><dt>Depth</dt><dd id="thinkDepth">–</dd></div>
+        <div class="stat"><dt>Nodes</dt><dd id="thinkNodes">–</dd></div>
+        <div class="stat"><dt>Nodes/s</dt><dd id="thinkNps">–</dd></div>
+      </dl>
+      <p class="pv" id="thinkPv" aria-label="Principal variation"></p>
+    </section>
+
+    <section class="panel">
+      <h2 class="label">Eval history <span class="hint">White up, Black down</span></h2>
+      <svg class="graph" id="graph" viewBox="0 0 300 72" preserveAspectRatio="none" role="img" aria-label="Evaluation history">
+        <line class="gmid" x1="0" y1="36" x2="300" y2="36"></line>
+        <path class="garea" id="graphArea" d="M0,36 Z"></path>
+        <polyline class="gline" id="graphLine" points="0,36"></polyline>
+        <circle class="gdot" id="graphDot" cx="0" cy="36" r="3.2"></circle>
+      </svg>
+    </section>
+
+    <section class="panel moves-panel">
+      <h2 class="label">Moves <span class="hint" id="moveCount"></span></h2>
+      <div class="moves-scroll">
+        <ol class="moves" id="moveList"></ol>
+      </div>
+    </section>
+
+    <section class="panel settings">
+      <h2 class="label">Settings</h2>
+      <div class="field">
+        <label for="strW"><span class="swatch w" aria-hidden="true"></span>White</label>
+        <select id="strW"></select>
+      </div>
+      <div class="field">
+        <label for="strB"><span class="swatch b" aria-hidden="true"></span>Black</label>
+        <select id="strB"></select>
+      </div>
+      <div class="field">
+        <label for="tc">Time</label>
+        <select id="tc"></select>
+      </div>
+      <p class="fieldhint" id="tcHint" aria-live="polite"></p>
+      <div class="field">
+        <label for="opening">Start</label>
+        <select id="opening"></select>
+      </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="stepMode"> Step mode (Stockfish only moves when you click)</label>
+        <label class="check"><input type="checkbox" id="autoplay"> Start next game automatically</label>
+        <label class="check"><input type="checkbox" id="sound"> Move sounds</label>
+      </div>
+    </section>
+
+    <section class="panel tally">
+      <h2 class="label">Score <button type="button" class="linkbtn" id="btnResetTally">Reset</button></h2>
+      <div class="tnums">
+        <div><span class="tval" id="tallyW">0</span><span class="tlab">White</span></div>
+        <div><span class="tval" id="tallyD">0</span><span class="tlab">Draws</span></div>
+        <div><span class="tval" id="tallyB">0</span><span class="tlab">Black</span></div>
+      </div>
+      <div class="tbar" id="tallyBar" hidden><span class="tw"></span><span class="td"></span><span class="tb"></span></div>
+      <ol class="glog" id="gameLog"></ol>
+      <p class="fieldhint" id="gameLogEmpty">No finished games yet.</p>
+    </section>
+  </aside>
+</main>
+
+<footer class="foot">
+  <p>Keys: <kbd>Space</kbd> start/pause · <kbd>Enter</kbd> next move · <kbd>←</kbd><kbd>→</kbd> browse moves · <kbd>F</kbd> flip board · <kbd>N</kbd> new game</p>
+  <p>Engine: Stockfish 19 Lite (GPLv3) via stockfish.js · Rules: chess.js · Pieces: cburnett (CC BY-SA 3.0) · <a href="https://github.com/EnricoZehnder/chesswatch">Source on GitHub</a></p>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
