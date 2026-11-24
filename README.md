@@ -31,16 +31,16 @@
 
 ### Sit back and watch
 
-Two Stockfish 19 engines play each other, live, right on your device. No server, no account, no ads.
+Two Stockfish engines play each other, live, right on your device. No server, no account, no ads.
 
-Pick the strength for each side, set the clock, and watch the eval bar swing, the search go deeper and the best line change with every move.
+Pick any version from **Stockfish 6 (2015) to Stockfish 19**, set the strength for each side, and watch the eval bar swing, the search go deeper and the best-move arrow change with every move.
 
 Want to follow along slowly? Turn on **step mode** and Stockfish only plays its next move when you click.
 
 </td>
 <td width="50%" align="center">
-<img src="docs/demo.gif" alt="Stockfish at full strength mates Stockfish at Elo 2100" width="380">
-<br><sub>Full strength vs. Elo 2100, 0.3 s per move</sub>
+<img src="docs/demo.gif" alt="Stockfish 19 Lite checkmates Stockfish 8" width="380">
+<br><sub>Stockfish 19 Lite vs. Stockfish 8, 0.3 s per move</sub>
 </td>
 </tr>
 </table>
@@ -49,14 +49,17 @@ Want to follow along slowly? Turn on **step mode** and Stockfish only plays its 
 
 | | |
 | --- | --- |
-| ♟️ **Engine vs. engine** | Two independent Stockfish 19 instances, compiled to WebAssembly |
+| ♟️ **Engine vs. engine** | Two independent Stockfish engines, compiled to WebAssembly |
+| 🕰️ **Every version** | Stockfish 19, 19 Lite, 18, 17.1, 16, 11, 10, 8 and 6. Old vs. new is fun |
+| 🎚️ **Strength per side** | Slider from Elo 1320 to full strength (skill 0 to 20 on classic engines) |
 | ⏯️ **Step mode** | Stockfish only moves when you click *Next move* or press <kbd>Enter</kbd> |
-| 🎚️ **Strength per side** | Full strength or Elo 1320 to 3000, set separately for White and Black |
+| 🔊 **Move sounds** | Wooden move, capture, castle and check sounds, on by default |
+| ➡️ **Best-move arrow** | See what the engine wants to play while it thinks |
 | ⏱️ **Time controls** | Fixed time per move (0.1 s to 10 s) or a real chess clock: Bullet 1+0, Blitz 3+2, Rapid 10+5 |
-| 📖 **Opening book** | 36 openings from the Najdorf to the King's Gambit, so no two games are the same |
+| 📖 **Openings** | Start from move one, or from one of 36 openings from the Najdorf to the King's Gambit |
 | 📈 **Live analysis** | Eval bar, depth, nodes, speed, best line and an eval history graph |
 | ⏪ **Review** | Browse back through the game while it keeps playing, then copy the PGN |
-| 🏆 **Score** | Wins, draws and losses across games, with automatic next game |
+| 🏆 **Score** | Wins, draws and losses across games, with captured pieces and material on screen |
 | 🌗 **Light and dark** | Follows your system theme and works on phones |
 
 ## 📸 Screenshots
@@ -83,7 +86,23 @@ Everything is on the **[Releases page](https://github.com/EnricoZehnder/chesswat
 | 🐧 **Linux** | `…-Linux-x86_64.AppImage` | `chmod +x` it, then run |
 | 📱 **iPhone / iPad** | `…-iOS-unsigned.ipa` | Install with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) |
 
-The apps aren't signed with paid Apple or Microsoft certificates, so your system asks once before opening them.
+The apps aren't signed with paid Apple or Microsoft certificates, so your system asks once before opening them. The apps download the full Stockfish 19 (95 MB) from the website the first time you pick it; every other engine is built in.
+
+## ♟️ Engines
+
+| Engine | Evaluation | Size | Strength setting |
+| --- | --- | --- | --- |
+| Stockfish 19 | Neural network | 95 MB | Elo 1320 – max |
+| Stockfish 19 Lite | Neural network (small) | 1.8 MB | Elo 1320 – max |
+| Stockfish 18 Lite | Neural network (small) | 7 MB | Elo 1320 – max |
+| Stockfish 17.1 Lite | Neural network (small) | 7 MB | Elo 1320 – max |
+| Stockfish 16 | Neural network | 39 MB | Elo 1320 – max |
+| Stockfish 11 | Classic | 3.6 MB | Skill 0 – 20 |
+| Stockfish 10 | Classic | 0.4 MB | Skill 0 – 20 |
+| Stockfish 8 | Classic | 1 MB | Skill 0 – 20 |
+| Stockfish 6 | Classic | 3.2 MB | Skill 0 – 20 |
+
+These are all the single-threaded browser builds of [stockfish.js](https://github.com/nmrugg/stockfish.js). Stockfish 1 to 5 never had one, and 12 to 15 only exist as multi-threaded builds, which need server headers GitHub Pages can't send.
 
 ## ⌨️ Keyboard shortcuts
 
@@ -95,17 +114,19 @@ The apps aren't signed with paid Apple or Microsoft certificates, so your system
 | <kbd>Esc</kbd> | Back to the live position |
 | <kbd>F</kbd> | Flip the board |
 | <kbd>N</kbd> | New game |
+| <kbd>M</kbd> | Sound on/off |
 
 ## 🔧 How it works
 
-Chesswatch is a plain static web app with no build step. Each side runs its own [Stockfish 19](https://stockfishchess.org) engine compiled to WebAssembly ([stockfish.js](https://github.com/nmrugg/stockfish.js)) in a web worker and talks to it over UCI. [chess.js](https://github.com/jhlywa/chess.js) checks the rules and detects checkmate, stalemate and draws.
+Chesswatch is a plain static web app with no build step. Each side runs its own [Stockfish](https://stockfishchess.org) engine compiled to WebAssembly ([stockfish.js](https://github.com/nmrugg/stockfish.js)) in a web worker and talks to it over UCI. Engines load only when you pick them. [chess.js](https://github.com/jhlywa/chess.js) checks the rules and detects checkmate, stalemate and draws.
 
-It uses the *lite* build of Stockfish 19: about 1.8 MB with a smaller neural network, so it loads instantly. The full build is about 100 MB. The lite engine is still far stronger than any human.
+The default is Stockfish 19 Lite: 1.8 MB with a smaller neural network, so it loads instantly and is still far stronger than any human. The move sounds are synthesized for Chesswatch (a modelled wooden piece on a wooden board), so they're free to use.
 
 The desktop apps wrap the same files in [Electron](https://www.electronjs.org), and the iOS app uses [Capacitor](https://capacitorjs.com).
 
 ```
-web/        the app (HTML, CSS, JS, Stockfish, chess.js)
+web/        the app (HTML, CSS, JS, chess.js, sounds)
+web/engines every Stockfish build, one folder per version
 desktop/    Electron wrapper
 ios/        Xcode project (Capacitor)
 build/      app icon

@@ -4,39 +4,63 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chesswatch</title>
-<meta name="description" content="Watch Stockfish 19 play against itself, live in your browser.">
-<meta name="theme-color" content="#0f1411">
+<meta name="description" content="Watch Stockfish play against itself, from Stockfish 6 to Stockfish 19, live in your browser.">
+<meta name="theme-color" content="#0c110e">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Chesswatch">
-<meta property="og:description" content="Watch Stockfish 19 play against itself, live in your browser.">
+<meta property="og:description" content="Watch Stockfish play against itself, from Stockfish 6 to Stockfish 19, live in your browser.">
 <meta property="og:image" content="https://enricozehnder.github.io/chesswatch/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Unbounded:wght@600;700&display=swap">
 <link rel="stylesheet" href="vendor/pieces.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <h1>Chesswatch</h1>
-    <p class="tagline"><span id="engineName">Stockfish 19</span> against itself, live in your browser</p>
-  </div>
-  <div class="status" id="status" data-state="loading" role="status" aria-live="polite">
-    <span class="sdot" aria-hidden="true"></span><span class="stext">Loading engine</span>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-step" viewBox="0 0 24 24"><path d="M5 5.5v13a1 1 0 0 0 1.53.85l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 5 5.5Z" fill="currentColor"/><rect x="17" y="5" width="2.6" height="14" rx="1.1" fill="currentColor"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-first" viewBox="0 0 24 24"><path d="M17 6l-6 6 6 6M7 6v12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-last" viewBox="0 0 24 24"><path d="M7 6l6 6-6 6M17 6v12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-flip" viewBox="0 0 24 24"><path d="M7 4v14m0 0-3-3m3 3 3-3M17 20V6m0 0-3 3m3-3 3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z" fill="currentColor"/><path d="m16 9.5 5 5m0-5-5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15.5 8.5V6.7a2.2 2.2 0 0 0-2.2-2.2H6.7a2.2 2.2 0 0 0-2.2 2.2v6.6a2.2 2.2 0 0 0 2.2 2.2h1.8" fill="none" stroke="currentColor" stroke-width="1.9"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h14m0 0-3.5-3.5M18 8l-3.5 3.5M20 16H6m0 0 3.5-3.5M6 16l3.5 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<header class="appbar">
+  <div class="appbar-inner">
+    <a class="brand" href="https://github.com/EnricoZehnder/chesswatch" aria-label="Chesswatch on GitHub">
+      <img src="icon.png" alt="" width="34" height="34">
+      <span class="wordmark">Chesswatch</span>
+    </a>
+    <div class="appbar-actions">
+      <span class="status" id="status" data-state="loading" role="status" aria-live="polite"><span class="sdot" aria-hidden="true"></span><span class="stext">Loading</span></span>
+      <button type="button" class="iconbtn" id="btnSound" aria-label="Sound on" title="Sound (M)"><svg><use href="#i-sound"/></svg><span class="soundhint" id="soundHint" hidden>Tap for sound</span></button>
+      <button type="button" class="btn btn-accent" id="btnNew" title="New game (N)"><svg><use href="#i-plus"/></svg><span>New game</span></button>
+    </div>
   </div>
 </header>
 
-<main class="layout">
-  <section class="stage" aria-label="Board">
+<main class="app">
+  <section class="stage" aria-label="Game">
     <div class="player" id="playerB" data-side="b">
-      <span class="swatch" aria-hidden="true"></span>
-      <div class="pinfo"><span class="pname">Stockfish 19</span><span class="pstr">Full strength</span></div>
-      <span class="pmat"></span>
-      <div class="clock"><span class="clabel">Used</span><span class="ctime">0:00</span></div>
+      <div class="avatar" aria-hidden="true"><span class="av-num">19</span><span class="av-sub">SF</span></div>
+      <div class="pinfo">
+        <div class="pname">Stockfish 19 Lite</div>
+        <div class="pmeta"><span class="pstr">Max strength</span><span class="captured" aria-label="Captured pieces"></span><span class="pmat"></span></div>
+      </div>
+      <div class="clock"><span class="ctime">0:00</span><span class="clabel">used</span></div>
     </div>
 
     <div class="board-row">
@@ -46,11 +70,23 @@
       </div>
       <div class="board-wrap">
         <div class="board" id="board" role="grid" aria-label="Chessboard"></div>
-        <div class="result" id="result" hidden>
-          <div class="rcard">
+        <svg class="arrows" id="arrows" viewBox="0 0 800 800" aria-hidden="true">
+          <defs>
+            <marker id="arrowhead" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 Z" class="arrowhead"/>
+            </marker>
+          </defs>
+          <line id="bestArrow" x1="0" y1="0" x2="0" y2="0" marker-end="url(#arrowhead)" visibility="hidden"></line>
+        </svg>
+        <div class="overlay" id="loader" hidden>
+          <div class="ocard"><span class="spinner" aria-hidden="true"></span><p id="loaderText">Loading engine</p><p class="osub" id="loaderSub"></p></div>
+        </div>
+        <div class="overlay result" id="result" hidden>
+          <div class="ocard">
             <p class="rscore" id="resultScore">1 – 0</p>
             <p class="rwinner" id="resultWinner">White wins</p>
             <p class="rreason" id="resultReason">Checkmate</p>
+            <div class="ractions"><button type="button" class="btn btn-accent" id="btnAgain">Next game</button></div>
             <p class="rnext" id="resultNext"></p>
           </div>
         </div>
@@ -58,111 +94,161 @@
     </div>
 
     <div class="player" id="playerW" data-side="w">
-      <span class="swatch" aria-hidden="true"></span>
-      <div class="pinfo"><span class="pname">Stockfish 19</span><span class="pstr">Full strength</span></div>
-      <span class="pmat"></span>
-      <div class="clock"><span class="clabel">Used</span><span class="ctime">0:00</span></div>
-    </div>
-
-    <div class="review" id="reviewBar" hidden>
-      <span>Reviewing: <strong id="reviewText"></strong></span>
-      <button type="button" class="btn small" id="btnLive">Back to live</button>
-    </div>
-
-    <div class="controls">
-      <button type="button" class="btn primary" id="btnPlay" disabled>Start</button>
-      <button type="button" class="btn" id="btnStep" disabled title="Let Stockfish play exactly one move (Enter)">Next move</button>
-      <button type="button" class="btn" id="btnNew">New game</button>
-      <div class="navbtns">
-        <button type="button" class="btn icon" id="btnPrev" aria-label="Previous move" title="Previous move (←)">‹</button>
-        <button type="button" class="btn icon" id="btnNext" aria-label="Next move" title="Next move (→)">›</button>
+      <div class="avatar" aria-hidden="true"><span class="av-num">19</span><span class="av-sub">SF</span></div>
+      <div class="pinfo">
+        <div class="pname">Stockfish 19 Lite</div>
+        <div class="pmeta"><span class="pstr">Max strength</span><span class="captured" aria-label="Captured pieces"></span><span class="pmat"></span></div>
       </div>
-      <button type="button" class="btn" id="btnFlip" title="Flip board (F)">Flip board</button>
-      <button type="button" class="btn" id="btnPgn">Copy PGN</button>
+      <div class="clock"><span class="ctime">0:00</span><span class="clabel">used</span></div>
     </div>
-    <div class="pgn" id="pgnWrap" hidden>
-      <label for="pgnBox" class="label">PGN</label>
-      <textarea id="pgnBox" rows="6" readonly></textarea>
+
+    <div class="transport">
+      <div class="tgroup">
+        <button type="button" class="iconbtn" id="btnFirst" aria-label="First move" title="First move (Home)"><svg><use href="#i-first"/></svg></button>
+        <button type="button" class="iconbtn" id="btnPrev" aria-label="Previous move" title="Previous move (←)"><svg><use href="#i-prev"/></svg></button>
+        <button type="button" class="playbtn" id="btnPlay" aria-label="Start" disabled><svg><use href="#i-play"/></svg></button>
+        <button type="button" class="iconbtn" id="btnNext" aria-label="Next move" title="Next move (→)"><svg><use href="#i-next"/></svg></button>
+        <button type="button" class="iconbtn" id="btnLast" aria-label="Live position" title="Live position (End)"><svg><use href="#i-last"/></svg></button>
+      </div>
+      <div class="tgroup">
+        <button type="button" class="btn" id="btnStep" title="Let Stockfish play one move (Enter)" disabled><svg><use href="#i-step"/></svg><span>Next move</span></button>
+        <button type="button" class="iconbtn" id="btnFlip" aria-label="Flip board" title="Flip board (F)"><svg><use href="#i-flip"/></svg></button>
+      </div>
+    </div>
+    <div class="review" id="reviewBar" hidden>
+      <span>Reviewing <strong id="reviewText"></strong></span>
+      <button type="button" class="linkbtn" id="btnLive">Back to live</button>
     </div>
   </section>
 
   <aside class="side">
-    <section class="panel opening-panel">
-      <h2 class="label">Opening</h2>
-      <p class="opening"><span class="eco" id="openingEco">—</span> <span id="openingName">Start position</span></p>
-    </section>
-
-    <section class="panel think" id="thinkBody" data-side="">
-      <h2 class="label"><span class="tdot" aria-hidden="true"></span><span id="thinkWho">Waiting for the next move</span></h2>
-      <dl class="stats">
-        <div class="stat big"><dt>Eval</dt><dd id="thinkEval">–</dd></div>
-        <div class="stat"><dt>Depth</dt><dd id="thinkDepth">–</dd></div>
-        <div class="stat"><dt>Nodes</dt><dd id="thinkNodes">–</dd></div>
-        <div class="stat"><dt>Nodes/s</dt><dd id="thinkNps">–</dd></div>
-      </dl>
-      <p class="pv" id="thinkPv" aria-label="Principal variation"></p>
-    </section>
-
-    <section class="panel">
-      <h2 class="label">Eval history <span class="hint">White up, Black down</span></h2>
-      <svg class="graph" id="graph" viewBox="0 0 300 72" preserveAspectRatio="none" role="img" aria-label="Evaluation history">
-        <line class="gmid" x1="0" y1="36" x2="300" y2="36"></line>
-        <path class="garea" id="graphArea" d="M0,36 Z"></path>
-        <polyline class="gline" id="graphLine" points="0,36"></polyline>
-        <circle class="gdot" id="graphDot" cx="0" cy="36" r="3.2"></circle>
+    <section class="card analysis" id="thinkBody" data-side="" aria-label="Engine analysis">
+      <div class="an-head">
+        <span class="tdot" aria-hidden="true"></span>
+        <span class="an-who" id="thinkWho">Waiting for the next move</span>
+        <span class="an-opening" id="openingBox"><span class="eco" id="openingEco"></span><span id="openingName"></span></span>
+      </div>
+      <div class="an-main">
+        <div class="an-eval" id="thinkEval">0.0</div>
+        <dl class="stats">
+          <div><dt>Depth</dt><dd id="thinkDepth">–</dd></div>
+          <div><dt>Nodes</dt><dd id="thinkNodes">–</dd></div>
+          <div><dt>Speed</dt><dd id="thinkNps">–</dd></div>
+        </dl>
+      </div>
+      <p class="pv" id="thinkPv" aria-label="Best line"></p>
+      <svg class="graph" id="graph" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Evaluation history, click to jump">
+        <rect class="gbg-b" x="0" y="32" width="300" height="32"></rect>
+        <line class="gmid" x1="0" y1="32" x2="300" y2="32"></line>
+        <path class="garea" id="graphArea" d="M0,32 Z"></path>
+        <polyline class="gline" id="graphLine" points="0,32"></polyline>
+        <circle class="gdot" id="graphDot" cx="0" cy="32" r="3.4"></circle>
       </svg>
     </section>
 
-    <section class="panel moves-panel">
-      <h2 class="label">Moves <span class="hint" id="moveCount"></span></h2>
-      <div class="moves-scroll">
-        <ol class="moves" id="moveList"></ol>
+    <section class="card tabs">
+      <div class="tablist" role="tablist" aria-label="Panels">
+        <button type="button" role="tab" id="tab-moves" aria-controls="panel-moves" aria-selected="true">Moves</button>
+        <button type="button" role="tab" id="tab-setup" aria-controls="panel-setup" aria-selected="false" tabindex="-1">Match setup</button>
+        <button type="button" role="tab" id="tab-score" aria-controls="panel-score" aria-selected="false" tabindex="-1">Score</button>
       </div>
-    </section>
 
-    <section class="panel settings">
-      <h2 class="label">Settings</h2>
-      <div class="field">
-        <label for="strW"><span class="swatch w" aria-hidden="true"></span>White</label>
-        <select id="strW"></select>
+      <div class="tabpanel" id="panel-moves" role="tabpanel" aria-labelledby="tab-moves">
+        <div class="moves-scroll" id="movesScroll"><ol class="moves" id="moveList"></ol><p class="empty" id="movesEmpty">Moves appear here once the game starts.</p></div>
+        <div class="panel-foot">
+          <span class="muted" id="moveCount"></span>
+          <button type="button" class="btn btn-small" id="btnPgn"><svg><use href="#i-copy"/></svg><span>Copy PGN</span></button>
+        </div>
+        <textarea id="pgnBox" class="pgnbox" rows="5" readonly hidden aria-label="PGN"></textarea>
       </div>
-      <div class="field">
-        <label for="strB"><span class="swatch b" aria-hidden="true"></span>Black</label>
-        <select id="strB"></select>
-      </div>
-      <div class="field">
-        <label for="tc">Time</label>
-        <select id="tc"></select>
-      </div>
-      <p class="fieldhint" id="tcHint" aria-live="polite"></p>
-      <div class="field">
-        <label for="opening">Start</label>
-        <select id="opening"></select>
-      </div>
-      <div class="checks">
-        <label class="check"><input type="checkbox" id="stepMode"> Step mode (Stockfish only moves when you click)</label>
-        <label class="check"><input type="checkbox" id="autoplay"> Start next game automatically</label>
-        <label class="check"><input type="checkbox" id="sound"> Move sounds</label>
-      </div>
-    </section>
 
-    <section class="panel tally">
-      <h2 class="label">Score <button type="button" class="linkbtn" id="btnResetTally">Reset</button></h2>
-      <div class="tnums">
-        <div><span class="tval" id="tallyW">0</span><span class="tlab">White</span></div>
-        <div><span class="tval" id="tallyD">0</span><span class="tlab">Draws</span></div>
-        <div><span class="tval" id="tallyB">0</span><span class="tlab">Black</span></div>
+      <div class="tabpanel" id="panel-setup" role="tabpanel" aria-labelledby="tab-setup" hidden>
+        <div class="sides">
+          <div class="sidecard" data-side="w">
+            <div class="sc-head"><span class="swatch w" aria-hidden="true"></span>White</div>
+            <div class="sc-grid">
+              <div class="sc-engine">
+                <label class="flabel" for="engW">Engine</label>
+                <div class="selectwrap"><select id="engW"></select></div>
+              </div>
+              <div class="sc-strength">
+                <div class="flabel-row"><label class="flabel" for="lvlW">Strength</label><output id="lvlOutW" for="lvlW">Max</output></div>
+                <input type="range" class="range" id="lvlW" min="0" max="100" step="1" value="100">
+                <div class="range-scale"><span id="lvlMinW">1320</span><span>Max</span></div>
+              </div>
+            </div>
+            <p class="enote" id="noteW"></p>
+          </div>
+          <button type="button" class="swap" id="btnSwap" aria-label="Swap White and Black" title="Swap sides"><svg><use href="#i-swap"/></svg></button>
+          <div class="sidecard" data-side="b">
+            <div class="sc-head"><span class="swatch b" aria-hidden="true"></span>Black</div>
+            <div class="sc-grid">
+              <div class="sc-engine">
+                <label class="flabel" for="engB">Engine</label>
+                <div class="selectwrap"><select id="engB"></select></div>
+              </div>
+              <div class="sc-strength">
+                <div class="flabel-row"><label class="flabel" for="lvlB">Strength</label><output id="lvlOutB" for="lvlB">Max</output></div>
+                <input type="range" class="range" id="lvlB" min="0" max="100" step="1" value="100">
+                <div class="range-scale"><span id="lvlMinB">1320</span><span>Max</span></div>
+              </div>
+            </div>
+            <p class="enote" id="noteB"></p>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="flabel" id="tcLabel">Time control</div>
+          <div class="segmented" id="tcSeg" role="radiogroup" aria-labelledby="tcLabel"></div>
+          <p class="hint" id="tcHint" aria-live="polite"></p>
+        </div>
+
+        <div class="switches">
+          <label class="switchrow" for="startPos">
+            <span><strong>Start from the starting position</strong><small>Turn off to start from a random opening</small></span>
+            <input type="checkbox" class="switch" id="startPos" role="switch">
+          </label>
+          <div class="field" id="openingRow" hidden>
+            <label class="flabel" for="opening">Opening</label>
+            <div class="selectwrap"><select id="opening"></select></div>
+          </div>
+          <label class="switchrow" for="stepMode">
+            <span><strong>Step mode</strong><small>Stockfish only moves when you press Next move</small></span>
+            <input type="checkbox" class="switch" id="stepMode" role="switch">
+          </label>
+          <label class="switchrow" for="sound">
+            <span><strong>Move sounds</strong></span>
+            <input type="checkbox" class="switch" id="sound" role="switch">
+          </label>
+          <label class="switchrow" for="arrow">
+            <span><strong>Show best-move arrow</strong></span>
+            <input type="checkbox" class="switch" id="arrow" role="switch">
+          </label>
+          <label class="switchrow" for="autoplay">
+            <span><strong>Start the next game automatically</strong></span>
+            <input type="checkbox" class="switch" id="autoplay" role="switch">
+          </label>
+        </div>
       </div>
-      <div class="tbar" id="tallyBar" hidden><span class="tw"></span><span class="td"></span><span class="tb"></span></div>
-      <ol class="glog" id="gameLog"></ol>
-      <p class="fieldhint" id="gameLogEmpty">No finished games yet.</p>
+
+      <div class="tabpanel" id="panel-score" role="tabpanel" aria-labelledby="tab-score" hidden>
+        <div class="tnums">
+          <div><span class="tval" id="tallyW">0</span><span class="tlab"><span class="swatch w" aria-hidden="true"></span>White</span></div>
+          <div><span class="tval" id="tallyD">0</span><span class="tlab">Draws</span></div>
+          <div><span class="tval" id="tallyB">0</span><span class="tlab"><span class="swatch b" aria-hidden="true"></span>Black</span></div>
+        </div>
+        <div class="tbar" id="tallyBar" hidden><span class="tw"></span><span class="td"></span><span class="tb"></span></div>
+        <ol class="glog" id="gameLog"></ol>
+        <p class="empty" id="gameLogEmpty">No finished games yet.</p>
+        <div class="panel-foot"><span></span><button type="button" class="linkbtn" id="btnResetTally">Reset score</button></div>
+      </div>
     </section>
   </aside>
 </main>
 
 <footer class="foot">
-  <p>Keys: <kbd>Space</kbd> start/pause · <kbd>Enter</kbd> next move · <kbd>←</kbd><kbd>→</kbd> browse moves · <kbd>F</kbd> flip board · <kbd>N</kbd> new game</p>
-  <p>Engine: Stockfish 19 Lite (GPLv3) via stockfish.js · Rules: chess.js · Pieces: cburnett (CC BY-SA 3.0) · <a href="https://github.com/EnricoZehnder/chesswatch">Source on GitHub</a></p>
+  <p><kbd>Space</kbd> play/pause · <kbd>Enter</kbd> next move · <kbd>←</kbd><kbd>→</kbd> browse · <kbd>F</kbd> flip · <kbd>N</kbd> new game · <kbd>M</kbd> sound</p>
+  <p>Stockfish (GPLv3) via stockfish.js · chess.js · pieces by cburnett (CC BY-SA 3.0) · <a href="https://github.com/EnricoZehnder/chesswatch">Source on GitHub</a></p>
 </footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

@@ -1,26 +1,31 @@
 // Thin wrapper around a Stockfish web worker that speaks UCI.
-
-const ENGINE_URL = new URL('./vendor/stockfish-19-lite-single.js', import.meta.url).href;
+import { workerUrl } from './engines.js';
 
 export class Engine {
-  constructor() {
-    this.worker = new Worker(ENGINE_URL);
+  constructor(def) {
+    this.def = def;
+    this.worker = new Worker(workerUrl(def));
     this.listeners = new Set();
     this.busy = null; // promise of the running search
-    this.name = 'Stockfish';
+    this.options = {}; // UCI options the engine reported
     this.limited = false;
+    this.dead = false;
     this.worker.onmessage = (e) => {
       const line = typeof e.data === 'string' ? e.data : String(e.data);
       for (const fn of [...this.listeners]) fn(line);
     };
+    this.failed = new Promise((_, reject) => {
+      this.worker.onerror = (e) => reject(new Error(e.message || 'Engine failed to load'));
+    });
+    this.failed.catch(() => {});
   }
 
   send(cmd) {
-    this.worker.postMessage(cmd);
+    if (!this.dead) this.worker.postMessage(cmd);
   }
 
   waitFor(re) {
-    return new Promise((resolve) => {
+    const p = new Promise((resolve) => {
       const fn = (line) => {
         if (re.test(line)) {
           this.listeners.delete(fn);
@@ -29,15 +34,30 @@ export class Engine {
       };
       this.listeners.add(fn);
     });
+    return Promise.race([p, this.failed]);
   }
 
   async init() {
-    const idLine = this.waitFor(/^id name /);
+    const collect = (line) => {
+      const m = line.match(/^option name (.+?) type (\w+)(?: default (\S*))?(?: min (-?\d+))?(?: max (-?\d+))?/);
+      if (m) this.options[m[1]] = { type: m[2], def: m[3], min: m[4] != null ? +m[4] : null, max: m[5] != null ? +m[5] : null };
+    };
+    this.listeners.add(collect);
     this.send('uci');
-    this.name = (await idLine).slice(8).replace(/\s*WASM$/, '');
     await this.waitFor(/^uciok/);
-    this.send('setoption name Hash value 32');
+    this.listeners.delete(collect);
+    const hash = this.options.Hash;
+    if (hash && (hash.max == null || hash.max >= 32)) this.send('setoption name Hash value 32');
     await this.ready();
+  }
+
+  get usesElo() {
+    return !!this.options.UCI_Elo;
+  }
+
+  get eloRange() {
+    const o = this.options.UCI_Elo;
+    return o ? [o.min ?? 1320, o.max ?? 3190] : null;
   }
 
   async ready() {
@@ -46,15 +66,21 @@ export class Engine {
     await p;
   }
 
-  // strength: 'max' or an Elo number (1320–3190)
-  async configure(strength) {
+  // level: 0–100, where 100 means full strength.
+  async configure(level) {
     await this.stop();
-    this.limited = strength !== 'max';
-    if (strength === 'max') {
-      this.send('setoption name UCI_LimitStrength value false');
-    } else {
-      this.send('setoption name UCI_LimitStrength value true');
-      this.send(`setoption name UCI_Elo value ${strength}`);
+    const full = level >= 100;
+    this.limited = !full;
+    if (this.usesElo) {
+      if (full) {
+        this.send('setoption name UCI_LimitStrength value false');
+        this.send('setoption name Skill Level value 20');
+      } else {
+        this.send('setoption name UCI_LimitStrength value true');
+        this.send(`setoption name UCI_Elo value ${levelToElo(level, this.eloRange)}`);
+      }
+    } else if (this.options['Skill Level']) {
+      this.send(`setoption name Skill Level value ${levelToSkill(level)}`);
     }
     await this.ready();
   }
@@ -98,15 +124,28 @@ export class Engine {
       };
       this.listeners.add(fn);
     });
-    this.busy = done.finally(() => { this.busy = null; });
+    this.busy = done.finally(() => {
+      this.busy = null;
+    });
     this.send(position);
     this.send(goCmd);
     return done;
   }
 
   terminate() {
+    this.dead = true;
+    this.listeners.clear();
     this.worker.terminate();
   }
+}
+
+export function levelToElo(level, range = [1320, 3190]) {
+  const [lo, hi] = range;
+  return Math.round((lo + (level / 100) * (hi - lo)) / 10) * 10;
+}
+
+export function levelToSkill(level) {
+  return Math.max(0, Math.min(20, Math.round((level / 100) * 20)));
 }
 
 function parseInfo(line) {
@@ -127,7 +166,14 @@ function parseInfo(line) {
         if (t[i + 1] === 'lowerbound' || t[i + 1] === 'upperbound') i++;
         break;
       }
-      case 'pv': info.pv = t.slice(i + 1); i = t.length; break;
+      case 'pv': {
+        // Some old builds append extra fields after the moves; keep only moves.
+        const rest = t.slice(i + 1);
+        const end = rest.findIndex((m) => !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m));
+        info.pv = end === -1 ? rest : rest.slice(0, end);
+        i = t.length;
+        break;
+      }
     }
   }
   return info;

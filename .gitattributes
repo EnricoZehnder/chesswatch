@@ -3,3 +3,6 @@
 *.gif binary
 *.wasm binary
 web/vendor/** linguist-vendored
+web/engines/** linguist-vendored
+*.wav binary
+*.nnue binary

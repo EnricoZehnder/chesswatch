@@ -1,8 +1,8 @@
 {
   "name": "chesswatch",
   "productName": "Chesswatch",
-  "version": "1.0.0",
-  "description": "Watch Stockfish 19 play against itself",
+  "version": "1.0.1",
+  "description": "Watch Stockfish play against itself, from Stockfish 6 to Stockfish 19",
   "main": "desktop/main.js",
   "private": true,
   "license": "GPL-3.0-or-later",
@@ -37,7 +37,8 @@
     "files": [
       "desktop/**",
       "web/**",
-      "package.json"
+      "package.json",
+      "!web/engines/sf19/*.wasm"
     ],
     "icon": "build/icon.png",
     "artifactName": "Chesswatch-${version}-${os}-${arch}.${ext}",

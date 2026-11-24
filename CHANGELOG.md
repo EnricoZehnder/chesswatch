@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1] - 2026-11-25
+
+### Added
+- Pick the Stockfish version for each side: Stockfish 19, 19 Lite, 18 Lite, 17.1 Lite, 16, 11, 10, 8 and 6. Let old engines play new ones.
+- Strength slider per side: Elo 1320 to max for neural-network engines, skill 0 to 20 for classic ones.
+- Move sounds, on by default: wooden move, capture, castle, check, promotion and game start/end sounds, made for Chesswatch.
+- Best-move arrow on the board while an engine is thinking.
+- Captured pieces and material count next to each player.
+- Swap sides button, first-move and last-move buttons.
+
+### Changed
+- New design: cleaner player bars, a live analysis card and tabs for moves, match setup and score.
+- Games start from the starting position by default. Turn it off in Match setup to start from a random opening.
+- Settings use switches and a time-control picker instead of dropdowns.
+
 ## [1.0.0] - 2026-11-24
 
 First public release.
