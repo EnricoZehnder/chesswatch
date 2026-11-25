@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.2] - unreleased
+## [1.0.2] - 2026-11-25
 
 ### Added
 - Play yourself: pick "You" for White, Black or both. Click or drag the pieces, with move dots and a promotion picker. Works on phones too.
