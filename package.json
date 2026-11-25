@@ -1,8 +1,8 @@
 {
   "name": "chesswatch",
   "productName": "Chesswatch",
-  "version": "1.0.1",
-  "description": "Watch Stockfish play against itself, from Stockfish 6 to Stockfish 19",
+  "version": "1.0.2",
+  "description": "Watch chess engines play each other, or play them yourself",
   "main": "desktop/main.js",
   "private": true,
   "license": "GPL-3.0-or-later",
@@ -38,7 +38,9 @@
       "desktop/**",
       "web/**",
       "package.json",
-      "!web/engines/sf19/*.wasm"
+      "!web/engines/sf19/*.wasm",
+      "!web/engines/berserk/*.wasm",
+      "!web/engines/obsidian/*.wasm"
     ],
     "icon": "build/icon.png",
     "artifactName": "Chesswatch-${version}-${os}-${arch}.${ext}",

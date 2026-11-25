@@ -1,0 +1,198 @@
+diff --git a/src/nnue.cpp b/src/nnue.cpp
+index 9d878c4..8b8ce09 100644
+--- a/src/nnue.cpp
++++ b/src/nnue.cpp
+@@ -1,13 +1,21 @@
+ #include "nnue.h"
+ #include "bitboard.h"
++#ifndef __EMSCRIPTEN__
+ #include "incbin.h"
++#endif
+ #include "position.h"
+ #include "util.h"
+ 
+ #include <iostream>
+ #include <fstream>
+ 
++#ifdef __EMSCRIPTEN__
++alignas(64) static const unsigned char gEmbeddedNNUEData[] = {
++#embed EVALFILE_PATH
++};
++#else
+ INCBIN(EmbeddedNNUE, EvalFile);
++#endif
+ 
+ #define AsVecI(x) *(VecI*)(&x)
+ #define AsVecF(x) *(VecF*)(&x)
+diff --git a/src/search.cpp b/src/search.cpp
+index 22846f8..64197c9 100644
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -671,6 +671,11 @@ namespace Search {
+       && elapsedTime() >= maxTime)
+         Threads::stopSearch();
+ 
++#ifdef __EMSCRIPTEN__
++    if (this == Threads::mainThread() && (maxTimeCounter & 4095) == 0)
++      Threads::wasmPoll();
++#endif
++
+     if (Threads::isSearchStopped())
+       return 0;
+ 
+diff --git a/src/search.h b/src/search.h
+index 73ba9ab..73ac666 100644
+--- a/src/search.h
++++ b/src/search.h
+@@ -140,6 +140,9 @@ namespace Search {
+     Score negamax(Position& position, Score alpha, Score beta, int depth,
+       bool cutNode, SearchInfo* ss, const Move excludedMove = MOVE_NONE);
+ 
++#ifdef __EMSCRIPTEN__
++  public: // the browser build starts the search directly
++#endif
+     void startSearch();
+   };
+ 
+diff --git a/src/threads.cpp b/src/threads.cpp
+index 3fd587f..20bd73f 100644
+--- a/src/threads.cpp
++++ b/src/threads.cpp
+@@ -33,6 +33,65 @@ namespace Threads {
+     return result;
+   }
+ 
++#ifdef __EMSCRIPTEN__
++}
++#include <emscripten.h>
++EM_ASYNC_JS(int, js_poll_stop, (), {
++  await new Promise((r) => setTimeout(r, 0));
++  const s = Module.stopFlag | 0;
++  Module.stopFlag = 0;
++  return s;
++});
++EM_JS(void, js_set_searching, (int on), { Module.searching = !!on; });
++
++namespace Threads {
++  void wasmPoll() {
++    static int64_t last = 0;
++    int64_t now = timeMillis();
++    if (now - last < 40)
++      return;
++    last = now;
++    if (js_poll_stop())
++      stopSearch();
++  }
++
++  void waitForSearch(bool waitMain) { (void) waitMain; }
++
++  void startSearch(Search::Settings& settings) {
++    searchSettings = settings;
++    searchStopped = false;
++    for (Search::Thread* st : searchThreads) {
++      st->nodesSearched = 0;
++      st->tbHits = 0;
++      st->completeDepth = 0;
++    }
++    Search::Thread* st = searchThreads[0];
++    st->searching = true;
++    js_set_searching(1);
++    st->startSearch();
++    js_set_searching(0);
++    st->searching = false;
++  }
++
++  void setThreadCount(int threadCount) {
++    if (threadCount > 1)
++      threadCount = 1; // the browser build is single-threaded
++    for (Search::Thread* st : searchThreads)
++      delete st;
++    searchThreads.assign(threadCount, nullptr);
++    for (int i = 0; i < threadCount; i++)
++      searchThreads[i] = new Search::Thread();
++  }
++
++  Search::Settings& getSearchSettings() {
++    return searchSettings;
++  }
++
++  void stopSearch() {
++    searchStopped = true;
++  }
++}
++#else
+   void waitForSearch(bool waitMain) {
+     for (int i = !waitMain; i < searchThreads.size(); i++) {
+       Search::Thread* st = searchThreads[i];
+@@ -105,3 +164,4 @@ namespace Threads {
+   }
+ 
+ }
++#endif
+diff --git a/src/threads.h b/src/threads.h
+index 7cd03bb..b54c986 100644
+--- a/src/threads.h
++++ b/src/threads.h
+@@ -10,6 +10,10 @@ namespace Threads {
+ 
+   Search::Thread* mainThread();
+ 
++#ifdef __EMSCRIPTEN__
++  void wasmPoll();
++#endif
++
+   bool isSearchStopped();
+ 
+   uint64_t totalNodes();
+diff --git a/src/tt.cpp b/src/tt.cpp
+index 49e4401..2cd7899 100644
+--- a/src/tt.cpp
++++ b/src/tt.cpp
+@@ -15,6 +15,10 @@ namespace TT {
+ 
+   void clear() {
+     tableAge = 0;
++#ifdef __EMSCRIPTEN__
++    memset(buckets, 0, bucketCount * sizeof(Bucket));
++    return;
++#endif
+ 
+     const int threadCount = UCI::Options["Threads"];
+     const uint64_t chunkSize = bucketCount / threadCount;
+diff --git a/src/uci.cpp b/src/uci.cpp
+index 3664664..0aad0ae 100644
+--- a/src/uci.cpp
++++ b/src/uci.cpp
+@@ -226,6 +226,15 @@ namespace {
+ 
+ }
+ 
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++// The browser hands us one UCI line at a time; wait for it without blocking the worker.
++EM_ASYNC_JS(char*, js_read_line, (), {
++  const line = await Module.nextLine();
++  return stringToNewUTF8(line);
++});
++#endif
++
+ void UCI::loop(int argc, char* argv[]) {
+ 
+   std::string token, cmd;
+@@ -238,8 +247,16 @@ void UCI::loop(int argc, char* argv[]) {
+     cmd += std::string(argv[i]) + " ";
+ 
+   do {
++#ifdef __EMSCRIPTEN__
++    if (argc == 1) {
++      char* line = js_read_line();
++      cmd = line;
++      free(line);
++    }
++#else
+     if (argc == 1 && !std::getline(std::cin, cmd))
+       cmd = "quit";
++#endif
+ 
+     std::istringstream is(cmd);
+ 

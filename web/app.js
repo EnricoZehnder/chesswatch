@@ -1,6 +1,6 @@
 import { Chess } from './vendor/chess.js';
 import { Engine, levelToElo, levelToSkill } from './engine.js';
-import { ENGINES, DEFAULT_ENGINE, engineById } from './engines.js';
+import { ENGINES, DEFAULT_ENGINE, engineById, isValidPlayer, HUMAN } from './engines.js';
 import { OPENINGS } from './openings.js';
 import * as sound from './sounds.js';
 
@@ -18,6 +18,8 @@ const TIME_CONTROLS = {
   c60_0: { type: 'clock', base: 60_000, inc: 0, label: '1+0', sub: 'bullet' },
   c180_2: { type: 'clock', base: 180_000, inc: 2000, label: '3+2', sub: 'blitz' },
   c600_5: { type: 'clock', base: 600_000, inc: 5000, label: '10+5', sub: 'rapid' },
+  custom: { type: 'move', custom: true, label: 'Custom', sub: 'per move' },
+  smart: { type: 'smart', label: 'Smart', sub: 'when sure' },
 };
 
 const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -133,7 +135,7 @@ function hasMatingMaterial(chess, side) {
 // ---------------------------------------------------------------- State
 
 const saved = store.get('settings', {});
-const validEngine = (id) => (ENGINES.some((e) => e.id === id) ? id : DEFAULT_ENGINE);
+const validEngine = (id) => (isValidPlayer(id) ? id : DEFAULT_ENGINE);
 const validLevel = (v) => (Number.isFinite(+v) ? Math.max(0, Math.min(100, +v)) : 100);
 
 const state = {
@@ -150,6 +152,7 @@ const state = {
   tcKey: TIME_CONTROLS[saved.tc] ? saved.tc : 'm1000',
   tc: TIME_CONTROLS[saved.tc] || TIME_CONTROLS.m1000,
   pendingTc: null,
+  customMs: Number.isFinite(saved.customMs) ? Math.max(100, Math.min(3_600_000, saved.customMs)) : 5000,
   clock: { w: 0, b: 0 },
   thinking: null,
   live: null,
@@ -159,6 +162,9 @@ const state = {
   openingChoice: saved.opening ?? 'random',
   stepMode: !!saved.stepMode,
   stepOnce: false,
+  stepWaiter: null, // resolves when Next move is pressed
+  humanWaiter: null, // resolves when the human makes a move
+  selected: null, // square the human picked up
   autoplay: saved.autoplay !== false,
   sound: saved.sound !== false,
   arrow: saved.arrow !== false,
@@ -176,6 +182,7 @@ function saveSettings() {
     lvlW: state.level.w,
     lvlB: state.level.b,
     tc: state.tcKey,
+    customMs: state.customMs,
     orientation: state.orientation,
     startPos: state.startPos,
     opening: state.openingChoice,
@@ -188,14 +195,24 @@ function saveSettings() {
 
 // ---------------------------------------------------------------- Engines
 
+const isHuman = (side) => state.engineId[side] === 'human';
+
 function strengthLabel(side, short = false) {
+  const def = engineById(state.engineId[side]);
+  if (def.human) return short ? 'You' : 'Human player';
   const lvl = state.level[side];
   if (lvl >= 100) return short ? 'Max' : 'Max strength';
   const eng = state.engines[side];
-  const def = engineById(state.engineId[side]);
-  const usesElo = eng ? eng.usesElo : def.eval === 'NNUE';
-  if (usesElo) return `Elo ${levelToElo(lvl, eng?.eloRange || undefined)}`;
-  return `Skill ${levelToSkill(lvl)}/20`;
+  if (def.strength === 'elo') return `Elo ${levelToElo(lvl, eng?.eloRange || undefined)}`;
+  if (def.strength === 'skill') return `Skill ${levelToSkill(lvl)}/20`;
+  return `Level ${Math.round(lvl)}`;
+}
+
+// Think time per move for the "per move" and "when sure" controls.
+function moveTimeMs() {
+  const tc = state.tc;
+  if (tc.custom || tc.type === 'smart') return state.customMs;
+  return tc.ms;
 }
 
 function showLoader(text, sub) {
@@ -213,6 +230,11 @@ function hideLoader() {
 async function ensureEngine(side) {
   const want = engineById(state.engineId[side]);
   let eng = state.engines[side];
+  if (want.human) {
+    eng?.terminate();
+    state.engines[side] = null;
+    return null;
+  }
   if (eng && eng.def.id === want.id && !eng.dead) return eng;
   eng?.terminate();
   state.engines[side] = null;
@@ -306,6 +328,7 @@ function renderBoard(fen, lastMove, animate) {
     el.classList.toggle('last', !!lastMove && (sq === lastMove.from || sq === lastMove.to));
     el.classList.toggle('check', sq === checkSq);
   }
+  renderInput();
 
   if (animate && lastMove && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const slides = [[lastMove.from, lastMove.to]];
@@ -328,6 +351,34 @@ function renderBoard(fen, lastMove, animate) {
       pc.style.transition = `transform ${dur}ms cubic-bezier(0.2, 0.7, 0.2, 1)`;
       pc.style.transform = '';
     }
+  }
+}
+
+// Human input: which pieces can be picked up, the selected square and its legal moves.
+function humanToMove() {
+  return !!state.humanWaiter && state.viewPly == null && !state.over;
+}
+
+function renderInput() {
+  const active = humanToMove();
+  boardEl.classList.toggle('input', active);
+  const side = state.chess.turn();
+  const targets = new Map();
+  if (active && state.selected) {
+    for (const m of state.chess.moves({ square: state.selected, verbose: true })) targets.set(m.to, !!m.captured);
+  }
+  for (const [sq, el] of squareEls) {
+    const pc = el.querySelector('.pc');
+    pc?.classList.toggle('mine', active && pc.className.includes(' ' + side));
+    el.classList.toggle('sel', active && sq === state.selected);
+    let dot = el.querySelector('.dot');
+    if (targets.has(sq)) {
+      if (!dot) {
+        dot = document.createElement('span');
+        el.append(dot);
+      }
+      dot.className = 'dot' + (targets.get(sq) ? ' cap' : '');
+    } else dot?.remove();
   }
 }
 
@@ -442,8 +493,9 @@ function renderPlayers() {
     const def = engineById(state.engineId[side]);
     el.style.order = side === state.orientation ? 3 : 1;
     el.querySelector('.pname').textContent = def.name;
-    el.querySelector('.av-num').textContent = def.version;
-    el.querySelector('.avatar').dataset.eval = def.eval;
+    el.querySelector('.av-num').textContent = def.badge;
+    el.querySelector('.av-sub').textContent = def.sub || '';
+    el.querySelector('.avatar').dataset.family = def.family;
     el.querySelector('.pstr').textContent = strengthLabel(side);
 
     const cap = el.querySelector('.captured');
@@ -491,6 +543,13 @@ function startTicker() {
       return;
     }
     renderClock(state.thinking.side);
+    const t = state.thinking;
+    if (t.human && state.tc.type === 'clock' && state.clock[t.side] - (performance.now() - t.start) <= 0) {
+      state.thinking = null;
+      tickerRunning = false;
+      flagFall(t.side);
+      return;
+    }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -499,13 +558,21 @@ function startTicker() {
 function renderLive() {
   const live = state.live;
   const box = $('thinkBody');
+  if (state.humanWaiter && !state.over) {
+    box.dataset.side = state.chess.turn();
+    $('thinkWho').textContent = isHuman(other(state.chess.turn()))
+      ? `${sideName(state.chess.turn())} to move`
+      : `Your move (${sideName(state.chess.turn())})`;
+    renderArrow();
+    return;
+  }
   if (!live || !live.info) {
     $('thinkWho').textContent = state.over
       ? 'Game over'
       : state.running
         ? `${sideName(state.chess.turn())} is thinking`
         : state.stepMode
-          ? 'Press Next move'
+          ? 'Press play to start'
           : 'Paused';
     box.dataset.side = state.running ? state.chess.turn() : '';
     if (!live) {
@@ -520,7 +587,10 @@ function renderLive() {
   }
   const { info, side, fen } = live;
   box.dataset.side = side;
-  $('thinkWho').textContent = `${sideName(side)} ${state.thinking?.side === side ? 'is thinking' : 'played'}`;
+  $('thinkWho').textContent =
+    state.stepWaiter && state.thinking?.side === side
+      ? `${sideName(side)} is thinking · press Next move`
+      : `${sideName(side)} ${state.thinking?.side === side ? 'is thinking' : 'played'}`;
   $('thinkDepth').textContent = info.depth >= 200 ? `${info.seldepth}` : `${info.depth}`;
   $('thinkNodes').textContent = formatNodes(info.nodes);
   $('thinkNps').textContent = formatNps(info.nps);
@@ -622,8 +692,9 @@ function renderStatus() {
   let text;
   if (!state.ready) [s, text] = ['loading', 'Loading'];
   else if (state.over) [s, text] = ['over', 'Game over'];
+  else if (state.humanWaiter) [s, text] = ['running', 'Your move'];
+  else if (state.running && state.stepMode) [s, text] = ['running', 'Step mode'];
   else if (state.running) [s, text] = ['running', 'Live'];
-  else if (state.stepMode) [s, text] = ['paused', 'Your turn'];
   else [s, text] = ['paused', 'Paused'];
   el.dataset.state = s;
   el.querySelector('.stext').textContent = text;
@@ -631,21 +702,23 @@ function renderStatus() {
   const play = $('btnPlay');
   const step = $('btnStep');
   const playing = state.running && !state.stepOnce;
-  play.disabled = !state.ready || (state.stepMode && state.running);
-  play.querySelector('use').setAttribute('href', playing ? '#i-pause' : state.stepMode ? '#i-step' : '#i-play');
+  play.disabled = !state.ready;
+  play.querySelector('use').setAttribute('href', playing ? '#i-pause' : '#i-play');
   const label = state.over
     ? 'Next game'
     : playing
       ? 'Pause'
-      : state.stepMode
-        ? `Let ${sideName(state.chess.turn())} move`
-        : state.plies.some((p) => !p.book)
-          ? 'Resume'
-          : 'Start';
+      : state.plies.some((p) => !p.book)
+        ? 'Resume'
+        : 'Start';
   play.setAttribute('aria-label', label);
   play.title = `${label} (Space)`;
-  step.disabled = !state.ready || state.running || !!state.over;
+  // Next move: plays the move the engine is thinking about (step mode),
+  // or lets the engine play exactly one move while paused.
+  const engineTurn = !isHuman(state.chess.turn());
+  step.disabled = !state.ready || !!state.over || !engineTurn || (state.running && !state.stepWaiter);
   step.querySelector('span').textContent = state.running && state.stepOnce ? 'Thinking…' : 'Next move';
+  step.classList.toggle('btn-accent', !!state.stepWaiter);
 }
 
 function renderResult() {
@@ -710,7 +783,7 @@ function renderSetup() {
   for (const side of ['w', 'b']) {
     const def = engineById(state.engineId[side]);
     $('eng' + S(side)).value = def.id;
-    const bits = [def.eval === 'NNUE' ? 'Neural network' : 'Classic evaluation', def.size];
+    const bits = def.human ? [] : [def.eval === 'NNUE' ? 'Neural network' : 'Classic evaluation', def.size];
     if (def.note) bits.push(def.note);
     $('note' + S(side)).textContent = bits.join(' · ');
     const range = $('lvl' + S(side));
@@ -718,8 +791,20 @@ function renderSetup() {
     range.style.setProperty('--p', state.level[side] + '%');
     $('lvlOut' + S(side)).textContent = strengthLabel(side, true);
     const eng = state.engines[side];
-    const usesElo = eng ? eng.usesElo : def.eval === 'NNUE';
-    $('lvlMin' + S(side)).textContent = usesElo ? `Elo ${eng?.eloRange?.[0] ?? 1320}` : 'Skill 0';
+    $('lvlMin' + S(side)).textContent =
+      def.strength === 'elo' ? `Elo ${eng?.eloRange?.[0] ?? 1320}` : def.strength === 'skill' ? 'Skill 0' : 'Level 0';
+    range.closest('.sidecard').querySelector('[data-strength]').hidden = !!def.human;
+  }
+  const tc = TIME_CONTROLS[state.tcKey];
+  $('customRow').hidden = !(tc.custom || tc.type === 'smart');
+  $('customLabel').textContent = tc.type === 'smart' ? 'Think at most' : 'Think time per move';
+  $('customHint').textContent =
+    tc.type === 'smart'
+      ? 'The engine moves as soon as its best move stays the same and the score stops changing.'
+      : '';
+  if (document.activeElement?.closest?.('.tin') == null) {
+    $('customMin').value = Math.floor(state.customMs / 60000);
+    $('customSec').value = Math.round((state.customMs % 60000) / 1000 * 10) / 10;
   }
   for (const b of $('tcSeg').querySelectorAll('button')) b.setAttribute('aria-checked', String(b.dataset.tc === state.tcKey));
   $('startPos').checked = state.startPos;
@@ -746,11 +831,22 @@ function clearNextGameTimer() {
   }
 }
 
+function resolveWaiters() {
+  const sw = state.stepWaiter;
+  const hw = state.humanWaiter;
+  state.stepWaiter = null;
+  state.humanWaiter = null;
+  state.selected = null;
+  sw?.(false);
+  hw?.(false);
+}
+
 async function halt() {
   state.running = false;
   state.stepOnce = false;
   state.token++;
   state.thinking = null;
+  resolveWaiters();
   releaseWakeLock();
   await Promise.all(['w', 'b'].map((s) => state.engines[s]?.stop()));
 }
@@ -776,13 +872,19 @@ async function newGame({ autostart = true } = {}) {
       state.plies.push(plyFrom(mv, { book: true }));
     }
   }
+  // Playing one side yourself? Put your pieces at the bottom.
+  const humans = ['w', 'b'].filter(isHuman);
+  if (humans.length === 1 && state.orientation !== humans[0]) {
+    state.orientation = humans[0];
+    buildBoard();
+  }
   state.clock = state.tc.type === 'clock' ? { w: state.tc.base, b: state.tc.base } : { w: 0, b: 0 };
   render();
   renderLive();
   if (state.ready) {
     for (const s of ['w', 'b']) if (state.engines[s]) await state.engines[s].newGame();
     sound.play('start');
-    if (autostart && !state.stepMode) start();
+    if (autostart) start();
   }
 }
 
@@ -810,7 +912,7 @@ function start({ once = false } = {}) {
   }
   clearNextGameTimer();
   state.viewPly = null;
-  state.stepOnce = once || state.stepMode;
+  state.stepOnce = once;
   state.running = true;
   state.token++;
   requestWakeLock();
@@ -824,10 +926,111 @@ async function pause() {
   renderLive();
 }
 
+// "Next move": in step mode, play what the engine found so far; when paused, let it play one move.
+function nextMove() {
+  if (state.stepWaiter) {
+    const w = state.stepWaiter;
+    state.stepWaiter = null;
+    w(true);
+    render();
+  } else if (!state.running && !state.over && !isHuman(state.chess.turn())) {
+    start({ once: true });
+  }
+}
+
+function waitForStepClick() {
+  return new Promise((resolve) => {
+    state.stepWaiter = resolve;
+    renderStatus();
+    renderLive();
+  });
+}
+
+// "When sure": stop once the best move has stayed the same for several depths
+// and the score has settled. The time limit still applies on top.
+function smartStopper(eng, legalMoves) {
+  const done = []; // best move and score at the end of each depth
+  let depth = 0;
+  let cur = null;
+  let stopped = false;
+  const t0 = performance.now();
+  return (info) => {
+    if (stopped || !info.pv?.length) return;
+    const elapsed = performance.now() - t0;
+    if (legalMoves === 1 && elapsed > 150) {
+      stopped = true;
+      eng.send('stop');
+      return;
+    }
+    if (info.depth > depth) {
+      if (cur) done.push(cur);
+      depth = info.depth;
+    }
+    const score = info.mate != null ? Math.sign(info.mate) * (100000 - Math.abs(info.mate)) : info.cp ?? 0;
+    cur = { move: info.pv[0], score };
+    if (elapsed < 300) return;
+    const mateFound = Math.abs(score) > 50000;
+    const need = mateFound ? 2 : 6;
+    if (done.length < (mateFound ? 4 : 10)) return;
+    const recent = done.slice(-need);
+    if (!recent.every((d) => d.move === cur.move)) return;
+    const scores = recent.map((d) => d.score).concat(score);
+    const swing = Math.max(...scores) - Math.min(...scores);
+    if (mateFound || swing <= 30) {
+      stopped = true;
+      eng.send('stop');
+    }
+  };
+}
+
+// Applies a move for either player and updates clocks, sounds and the board.
+function playMove(mv, side, elapsed, evalWhite, animate) {
+  const tc = state.tc;
+  if (tc.type === 'clock' && !state.stepMode) {
+    state.clock[side] -= elapsed;
+    if (state.clock[side] <= 0) {
+      flagFall(side);
+      return false;
+    }
+    state.clock[side] += tc.inc;
+  } else if (tc.type !== 'clock') {
+    state.clock[side] += elapsed;
+  }
+  state.plies.push(plyFrom(mv, { eval: evalWhite, ms: elapsed }));
+  if (!state.chess.isGameOver()) sound.play(sound.soundForMove(mv, state.chess.inCheck()));
+  render({ animate: animate && state.viewPly == null });
+  renderLive();
+  return true;
+}
+
+function flagFall(side) {
+  state.clock[side] = 0;
+  if (hasMatingMaterial(state.chess, other(side))) finish(side === 'w' ? '0-1' : '1-0', 'Time forfeit');
+  else finish('1/2-1/2', 'Time ran out, but no mating material');
+}
+
+// Waits for the human to move. Resolves true when a move was made.
+function humanTurn(side) {
+  state.thinking = { side, start: performance.now(), human: true };
+  state.selected = null;
+  startTicker();
+  return new Promise((resolve) => {
+    state.humanWaiter = resolve;
+    render();
+    renderLive();
+  });
+}
+
 async function loop(tok) {
   while (state.running && tok === state.token) {
     if (checkGameOver()) return;
     const side = state.chess.turn();
+
+    if (isHuman(side)) {
+      const moved = await humanTurn(side);
+      if (!moved || tok !== state.token) return;
+      continue;
+    }
 
     let eng;
     try {
@@ -851,10 +1054,13 @@ async function loop(tok) {
     const moves = state.plies.map((p) => p.uci).join(' ');
     const position = 'position startpos' + (moves ? ' moves ' + moves : '');
     const tc = state.tc;
-    const go =
-      tc.type === 'move'
-        ? `go movetime ${tc.ms}`
-        : `go wtime ${Math.max(1, Math.round(state.clock.w))} btime ${Math.max(1, Math.round(state.clock.b))} winc ${tc.inc} binc ${tc.inc}`;
+    const step = state.stepMode && !state.stepOnce;
+    let go;
+    if (step) go = 'go infinite';
+    else if (tc.type === 'clock')
+      go = `go wtime ${Math.max(1, Math.round(state.clock.w))} btime ${Math.max(1, Math.round(state.clock.b))} winc ${tc.inc} binc ${tc.inc}`;
+    else go = `go movetime ${moveTimeMs()}`;
+    if (eng.nodeLimit) go += ` nodes ${eng.nodeLimit}`;
 
     const fen = state.chess.fen();
     state.live = { side, info: null, ev: null, fen };
@@ -863,28 +1069,31 @@ async function loop(tok) {
     renderLive();
     startTicker();
 
-    const res = await eng.search(position, go, (info) => {
+    const smart = !step && tc.type === 'smart' ? smartStopper(eng, state.chess.moves().length) : null;
+    const searching = eng.search(position, go, (info) => {
       if (tok !== state.token) return;
       state.live = { side, info, ev: toWhitePov(info, side), fen };
+      smart?.(info);
       renderLive();
     });
+
+    let res;
+    if (step) {
+      // Think until Next move is pressed. If the engine finishes on its own
+      // (node limit), keep its move and still wait for the click.
+      let finished = null;
+      searching.then((r) => (finished = r));
+      const go_ = await waitForStepClick();
+      if (!go_ || tok !== state.token) return;
+      if (!finished) eng.send('stop');
+      res = await searching;
+    } else {
+      res = await searching;
+    }
 
     if (tok !== state.token || !state.running) return;
     const elapsed = performance.now() - state.thinking.start;
     state.thinking = null;
-
-    if (tc.type === 'clock') {
-      state.clock[side] -= elapsed;
-      if (state.clock[side] <= 0) {
-        state.clock[side] = 0;
-        if (hasMatingMaterial(state.chess, other(side))) finish(side === 'w' ? '0-1' : '1-0', 'Time forfeit');
-        else finish('1/2-1/2', 'Time ran out, but no mating material');
-        return;
-      }
-      state.clock[side] += tc.inc;
-    } else {
-      state.clock[side] += elapsed;
-    }
 
     const bm = res.bestmove;
     if (!bm || bm === '(none)') {
@@ -898,10 +1107,7 @@ async function loop(tok) {
       finish(side === 'w' ? '0-1' : '1-0', `Illegal move ${bm}`);
       return;
     }
-    state.plies.push(plyFrom(mv, { eval: toWhitePov(res.info, side), ms: elapsed }));
-    if (!state.chess.isGameOver()) sound.play(sound.soundForMove(mv, state.chess.inCheck()));
-    render({ animate: state.viewPly == null });
-    renderLive();
+    if (!playMove(mv, side, elapsed, toWhitePov(res.info, side), true)) return;
 
     if (state.stepOnce) {
       // Exactly one move was allowed, now wait again
@@ -917,7 +1123,7 @@ async function loop(tok) {
     }
 
     // With very short think times, pause briefly so you can still follow the game.
-    if (tc.type === 'move' && tc.ms < 300) await sleep(140);
+    if (!step && tc.type === 'move' && moveTimeMs() < 300) await sleep(140);
   }
 }
 
@@ -941,6 +1147,7 @@ function finish(result, reason, extra = {}) {
   state.stepOnce = false;
   state.token++;
   state.thinking = null;
+  resolveWaiters();
   releaseWakeLock();
   sound.play('end');
 
@@ -959,7 +1166,7 @@ function finish(result, reason, extra = {}) {
   t.games = t.games.slice(0, 50);
   store.set('tally', t);
 
-  if (state.autoplay && !state.stepMode) {
+  if (state.autoplay && !state.stepMode && !isHuman('w') && !isHuman('b')) {
     state.nextGameTimer = setTimeout(() => {
       state.nextGameTimer = null;
       newGame();
@@ -1079,29 +1286,32 @@ function setupControls() {
   // Engine pickers
   for (const side of ['w', 'b']) {
     const sel = $('eng' + S(side));
-    const groups = [
-      ['Neural network (NNUE)', ENGINES.filter((e) => e.eval === 'NNUE')],
-      ['Classic evaluation', ENGINES.filter((e) => e.eval === 'Classic')],
-    ];
+    const groups = [['Player', [HUMAN]]];
+    for (const e of ENGINES) {
+      let g = groups.find(([label]) => label === e.group);
+      if (!g) groups.push((g = [e.group, []]));
+      g[1].push(e);
+    }
     for (const [label, list] of groups) {
       const g = document.createElement('optgroup');
       g.label = label;
       for (const e of list) {
         const o = document.createElement('option');
         o.value = e.id;
-        o.textContent = e.name;
+        o.textContent = e.human ? 'You (play yourself)' : e.name;
         g.append(o);
       }
       sel.append(g);
     }
-    sel.addEventListener('change', () => {
+    sel.addEventListener('change', async () => {
       state.engineId[side] = sel.value;
       state.needsConfig[side] = true;
       saveSettings();
       renderSetup();
       renderPlayers();
+      await restartIfRunning();
       // Load it right away so the next move doesn't wait.
-      if (!state.running) ensureEngine(side).catch(() => toast(`${engineById(sel.value).name} could not be loaded.`));
+      ensureEngine(side).catch(() => toast(`${engineById(sel.value).name} could not be loaded.`));
     });
 
     const range = $('lvl' + S(side));
@@ -1115,15 +1325,33 @@ function setupControls() {
     range.addEventListener('change', saveSettings);
   }
 
-  $('btnSwap').addEventListener('click', () => {
+  $('btnSwap').addEventListener('click', async () => {
+    const wasRunning = state.running;
+    if (wasRunning) await halt();
     [state.engineId.w, state.engineId.b] = [state.engineId.b, state.engineId.w];
     [state.level.w, state.level.b] = [state.level.b, state.level.w];
     [state.engines.w, state.engines.b] = [state.engines.b, state.engines.w];
     state.needsConfig = { w: true, b: true };
     saveSettings();
     renderSetup();
-    renderPlayers();
+    render();
+    if (wasRunning) start();
   });
+
+  // Custom think time (minutes + seconds)
+  const readCustom = () => {
+    const m = Math.max(0, Math.min(60, Math.floor(+$('customMin').value || 0)));
+    const sec = Math.max(0, Math.min(59.9, +$('customSec').value || 0));
+    state.customMs = Math.max(100, Math.round((m * 60 + sec) * 1000));
+    saveSettings();
+  };
+  for (const id of ['customMin', 'customSec']) {
+    $(id).addEventListener('input', readCustom);
+    $(id).addEventListener('change', () => {
+      readCustom();
+      renderSetup();
+    });
+  }
 
   // Time control
   const seg = $('tcSeg');
@@ -1159,13 +1387,11 @@ function setupControls() {
     saveSettings();
     toast('Applies from the next game');
   });
-  $('stepMode').addEventListener('change', (e) => {
+  $('stepMode').addEventListener('change', async (e) => {
     state.stepMode = e.target.checked;
     saveSettings();
-    if (state.stepMode) {
-      clearNextGameTimer();
-      if (state.running) state.stepOnce = true; // let the current search finish its move
-    }
+    if (state.stepMode) clearNextGameTimer();
+    await restartIfRunning();
     render();
     renderLive();
   });
@@ -1218,11 +1444,9 @@ function setupControls() {
   }
 
   // Transport
-  $('btnPlay').addEventListener('click', () => {
-    if (state.stepMode) return state.running ? null : start({ once: true });
-    return state.running ? pause() : start();
-  });
-  $('btnStep').addEventListener('click', () => start({ once: true }));
+  $('btnPlay').addEventListener('click', () => (state.running ? pause() : start()));
+  $('btnStep').addEventListener('click', nextMove);
+  setupBoardInput();
   $('btnNew').addEventListener('click', () => newGame());
   $('btnAgain').addEventListener('click', () => newGame());
   $('btnFlip').addEventListener('click', flip);
@@ -1267,7 +1491,7 @@ function setupControls() {
       goTo(null);
     } else if (k === 'Enter' && !e.target.closest('button, a')) {
       e.preventDefault();
-      if (!state.running) start({ once: true });
+      nextMove();
     } else if (k === 'f' || k === 'F') {
       flip();
     } else if (k === 'n' || k === 'N') {
@@ -1278,13 +1502,141 @@ function setupControls() {
   });
 }
 
+// Re-start the game loop from the current position (after changing players or modes).
+async function restartIfRunning() {
+  if (!state.running) return;
+  await halt();
+  start();
+}
+
+// ---------------------------------------------------------------- Playing by hand
+
+function squareFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y)?.closest?.('.sq');
+  return el && boardEl.contains(el) ? el.dataset.sq : null;
+}
+
+function legalTargets(from) {
+  return state.chess.moves({ square: from, verbose: true });
+}
+
+function askPromotion(color) {
+  return new Promise((resolve) => {
+    const box = $('promo');
+    for (const b of box.querySelectorAll('button')) {
+      b.querySelector('.pc').className = 'pc ' + color + b.dataset.p.toUpperCase();
+      b.onclick = () => {
+        box.hidden = true;
+        resolve(b.dataset.p);
+      };
+    }
+    box.onclick = (e) => {
+      if (e.target === box) {
+        box.hidden = true;
+        resolve(null);
+      }
+    };
+    box.hidden = false;
+    box.querySelector('button').focus();
+  });
+}
+
+async function tryHumanMove(from, to, animate) {
+  if (!humanToMove()) return false;
+  const options = legalTargets(from).filter((m) => m.to === to);
+  if (!options.length) return false;
+  let promotion;
+  if (options.some((m) => m.promotion)) {
+    promotion = await askPromotion(state.chess.turn());
+    if (!promotion || !humanToMove()) return false;
+  }
+  const side = state.chess.turn();
+  const mv = state.chess.move({ from, to, promotion });
+  const elapsed = performance.now() - (state.thinking?.start ?? performance.now());
+  state.thinking = null;
+  state.selected = null;
+  const resolve = state.humanWaiter;
+  state.humanWaiter = null;
+  if (playMove(mv, side, elapsed, null, animate)) resolve?.(true);
+  else resolve?.(false);
+  return true;
+}
+
+function setupBoardInput() {
+  let drag = null; // { from, pointerId, ghost, piece, startX, startY, moved }
+
+  boardEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    if (!humanToMove()) {
+      if (state.humanWaiter && state.viewPly != null) goTo(null); // back to the live position
+      return;
+    }
+    const sq = squareFromPoint(e.clientX, e.clientY);
+    if (!sq) return;
+    const piece = state.chess.get(sq);
+    if (state.selected && state.selected !== sq && legalTargets(state.selected).some((m) => m.to === sq)) {
+      tryHumanMove(state.selected, sq, true);
+      return;
+    }
+    if (!piece || piece.color !== state.chess.turn()) {
+      state.selected = null;
+      renderInput();
+      return;
+    }
+    e.preventDefault();
+    state.selected = sq;
+    renderInput();
+    const pc = squareEls.get(sq).querySelector('.pc');
+    drag = { from: sq, pointerId: e.pointerId, pc, ghost: null, startX: e.clientX, startY: e.clientY };
+    boardEl.setPointerCapture(e.pointerId);
+  });
+
+  boardEl.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    if (!drag.ghost) {
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4) return;
+      const size = drag.pc.getBoundingClientRect().width;
+      drag.ghost = document.createElement('div');
+      drag.ghost.className = 'ghost ' + [...drag.pc.classList].find((c) => /^[wb][PNBRQK]$/.test(c));
+      drag.ghost.style.width = drag.ghost.style.height = size + 'px';
+      document.body.append(drag.ghost);
+      drag.pc.classList.add('lifted');
+    }
+    drag.ghost.style.left = e.clientX + 'px';
+    drag.ghost.style.top = e.clientY + 'px';
+    const over = squareFromPoint(e.clientX, e.clientY);
+    for (const [sq, el] of squareEls) el.classList.toggle('drop-target', sq === over && sq !== drag.from);
+  });
+
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const d = drag;
+    drag = null;
+    for (const el of squareEls.values()) el.classList.remove('drop-target');
+    if (!d.ghost) return; // a plain click keeps the piece selected
+    d.ghost.remove();
+    d.pc.classList.remove('lifted');
+    const to = e.type === 'pointerup' ? squareFromPoint(e.clientX, e.clientY) : null;
+    if (to && to !== d.from) {
+      tryHumanMove(d.from, to, false).then((ok) => {
+        if (!ok) {
+          state.selected = null;
+          renderInput();
+        }
+      });
+    }
+  };
+  boardEl.addEventListener('pointerup', endDrag);
+  boardEl.addEventListener('pointercancel', endDrag);
+}
+
 function setTimeControl(key) {
   const next = TIME_CONTROLS[key];
   const prev = state.tc;
   state.tcKey = key;
   saveSettings();
   const midGame = state.plies.some((p) => !p.book) && !state.over;
-  if (next.type === 'move' && prev.type === 'move') {
+  if (next.type !== 'clock' && prev.type !== 'clock') {
     state.tc = next;
     state.pendingTc = null;
     $('tcHint').textContent = '';

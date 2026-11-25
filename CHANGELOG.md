@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.2] - 2026-11-25
+
+### Added
+- Play yourself: pick "You" for White, Black or both. Click or drag the pieces, with move dots and a promotion picker. Works on phones too.
+- New engines: Berserk and Obsidian (built for the browser by Chesswatch) and Lozza 11.
+- Step mode now thinks ahead: the engine searches while it waits, and Next move plays its best move right away.
+- Custom think time per move, in minutes and seconds.
+- Smart time control: the engine moves as soon as it's sure (best move stable, score settled), up to a maximum you set.
+- Strength levels for engines without their own setting (Berserk, Obsidian, Lozza).
+
+### Changed
+- When you play one side, the board turns so your pieces are at the bottom.
+- No automatic next game while someone plays by hand.
+
 ## [1.0.1] - 2026-11-25
 
 ### Added

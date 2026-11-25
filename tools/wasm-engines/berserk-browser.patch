@@ -1,0 +1,228 @@
+diff --git a/src/nn/evaluate.c b/src/nn/evaluate.c
+index 20898c3..9d7241a 100644
+--- a/src/nn/evaluate.c
++++ b/src/nn/evaluate.c
+@@ -27,11 +27,20 @@
+ #include "accumulator.h"
+ #include "threats.h"
+ 
++#ifndef __EMSCRIPTEN__
+ #define INCBIN_PREFIX
+ #define INCBIN_STYLE INCBIN_STYLE_CAMEL
+ #include "../incbin.h"
++#endif
+ 
++#ifdef __EMSCRIPTEN__
++static const unsigned char EmbedData[] __attribute__((aligned(64))) = {
++#embed EVALFILE_PATH
++};
++static const unsigned int EmbedSize = sizeof(EmbedData);
++#else
+ INCBIN(Embed, EVALFILE);
++#endif
+ 
+ #define FT_MAX     255
+ #define FT_SHIFT   9
+diff --git a/src/pyrrhic/stdendian.h b/src/pyrrhic/stdendian.h
+index 6655ab8..ca3b560 100644
+--- a/src/pyrrhic/stdendian.h
++++ b/src/pyrrhic/stdendian.h
+@@ -8,7 +8,7 @@
+ #endif
+ 
+ /* Linux / GLIBC */
+-#if defined(__linux__) || defined(__GLIBC__) || defined(__CYGWIN__)
++#if defined(__linux__) || defined(__GLIBC__) || defined(__EMSCRIPTEN__) || defined(__CYGWIN__)
+ #include <byteswap.h>
+ #include <endian.h>
+ #define __ENDIAN_DEFINED   1
+diff --git a/src/search.c b/src/search.c
+index 71836f8..2268c8a 100644
+--- a/src/search.c
++++ b/src/search.c
+@@ -87,6 +87,12 @@ INLINE Bool CheckLimits(ThreadData* thread) {
+     return 0;
+   thread->calls = Limits.hitrate;
+ 
++#ifdef __EMSCRIPTEN__
++  WasmPoll(0);
++  if (Threads.stop)
++    return 1;
++#endif
++
+   if (Threads.ponder)
+     return 0;
+ 
+diff --git a/src/thread.c b/src/thread.c
+index 5b5468e..fccaf08 100644
+--- a/src/thread.c
++++ b/src/thread.c
+@@ -28,6 +28,116 @@
+ #include "types.h"
+ #include "util.h"
+ 
++#ifdef __EMSCRIPTEN__
++// Browser build: one thread, no pthreads. Actions run synchronously, and
++// long waits (ponder / go infinite) yield to the browser so "stop" can arrive.
++#include <emscripten.h>
++
++ThreadPool Threads;
++
++EM_ASYNC_JS(int, js_poll, (int waitMs), {
++  await new Promise((r) => setTimeout(r, waitMs));
++  const s = Module.stopFlag | 0;
++  const p = Module.ponderHit | 0;
++  Module.stopFlag = 0;
++  Module.ponderHit = 0;
++  return s | (p << 1);
++});
++
++EM_JS(void, js_set_searching, (int on), { Module.searching = !!on; });
++
++void WasmPoll(int force) {
++  static long last = 0;
++  long now = GetTimeMS();
++  if (!force && now - last < 40)
++    return;
++  last   = now;
++  int r  = js_poll(force ? 10 : 0);
++  if (r & 1)
++    Threads.stop = 1;
++  if (r & 2) {
++    Threads.ponder = 0;
++    if (Threads.stopOnPonderHit)
++      Threads.stop = 1;
++  }
++}
++
++void ThreadWaitUntilSleep(ThreadData* thread) {
++  if (thread->idx == 0)
++    Threads.searching = 0;
++}
++
++void ThreadWait(ThreadData* thread, atomic_uchar* cond) {
++  (void) thread;
++  while (!atomic_load(cond))
++    WasmPoll(1);
++}
++
++void ThreadWake(ThreadData* thread, int action) {
++  if (action == THREAD_RESUME)
++    return;
++  thread->action = action;
++  if (action == THREAD_TT_CLEAR)
++    TTClearPart(thread->idx, Threads.count);
++  else if (action == THREAD_SEARCH_CLEAR)
++    SearchClearThread(thread);
++  else if (action == THREAD_SEARCH) {
++    js_set_searching(1);
++    if (thread->idx)
++      Search(thread);
++    else
++      MainSearch();
++    js_set_searching(0);
++    if (thread->idx == 0)
++      Threads.searching = 0;
++  }
++  thread->action = THREAD_SLEEP;
++}
++
++static void ThreadCreate(int i) {
++  ThreadData* thread = calloc(1, sizeof(ThreadData));
++  thread->idx        = i;
++  const size_t alignment = 4096;
++  thread->accumulators       = (Accumulator*) AlignedMalloc(sizeof(Accumulator) * (MAX_SEARCH_PLY + 1), alignment);
++  thread->board.accumulators = thread->accumulators;
++  thread->board.refreshTable =
++    (AccumulatorKingState*) AlignedMalloc(sizeof(AccumulatorKingState) * 2 * 2 * N_KING_BUCKETS, alignment);
++  ResetRefreshTable(thread->board.refreshTable);
++  Threads.threads[i] = thread;
++}
++
++static void ThreadDestroy(ThreadData* thread) {
++  AlignedFree(thread->accumulators);
++  AlignedFree(thread->board.refreshTable);
++  free(thread);
++}
++
++void ThreadsSetNumber(int n) {
++  if (n > 1)
++    n = 1; // the browser build is single-threaded
++  while (Threads.count < n)
++    ThreadCreate(Threads.count++);
++  while (Threads.count > n)
++    ThreadDestroy(Threads.threads[--Threads.count]);
++  if (n == 0)
++    Threads.searching = 0;
++}
++
++void ThreadsExit(void) {
++  ThreadsSetNumber(0);
++}
++
++void ThreadsInit(void) {
++  Threads.count = 1;
++  ThreadCreate(0);
++}
++
++static void ThreadsRun(int action) {
++  for (int i = 0; i < Threads.count; i++)
++    ThreadWake(Threads.threads[i], action);
++}
++
++#else
+ // Below is an implementation of CFish's Sleeping Threads
+ // This is implemented entirely with pThreads
+ ThreadPool Threads;
+@@ -206,6 +316,8 @@ static void ThreadsRun(int action) {
+     ThreadWaitUntilSleep(Threads.threads[i]);
+ }
+ 
++#endif
++
+ void ThreadsClearTT(void) {
+   ThreadsRun(THREAD_TT_CLEAR);
+ }
+diff --git a/src/thread.h b/src/thread.h
+index 60e4a67..2c071b2 100644
+--- a/src/thread.h
++++ b/src/thread.h
+@@ -102,4 +102,8 @@ void ThreadsResetRefreshTables(void);
+ uint64_t NodesSearched(void);
+ uint64_t TBHits(void);
+ 
++#ifdef __EMSCRIPTEN__
++void WasmPoll(int force);
++#endif
++
+ #endif
+\ No newline at end of file
+diff --git a/src/uci.c b/src/uci.c
+index 432af6d..fbbb53c 100644
+--- a/src/uci.c
++++ b/src/uci.c
+@@ -707,9 +707,24 @@ static const UCICommand COMMANDS[] = {
+ 
+ #define NUM_COMMANDS ((int) (sizeof(COMMANDS) / sizeof(COMMANDS[0])))
+ 
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++// The browser hands us one UCI line at a time; wait for it without blocking the worker.
++EM_ASYNC_JS(char*, js_read_line, (), {
++  const line = await Module.nextLine();
++  return stringToNewUTF8(line);
++});
++
++static int ReadLine(char* in) {
++  char* line = js_read_line();
++  strncpy(in, line, 8191);
++  in[8191] = '\0';
++  free(line);
++#else
+ static int ReadLine(char* in) {
+   if (fgets(in, 8192, stdin) == NULL)
+     return 0;
++#endif
+ 
+   size_t c = strcspn(in, "\r\n");
+   if (c < strlen(in))

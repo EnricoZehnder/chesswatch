@@ -69,8 +69,8 @@ jobs:
           xcodebuild -version
       - run: npm ci
       - run: npx cap sync ios
-      - name: Leave the 95 MB engine out of the app (it loads from the website)
-        run: rm -f ios/App/App/public/engines/sf19/*.wasm
+      - name: Leave the big engines out of the app (they load from the website)
+        run: rm -f ios/App/App/public/engines/sf19/*.wasm ios/App/App/public/engines/berserk/*.wasm ios/App/App/public/engines/obsidian/*.wasm
       - name: Build app (no code signing)
         run: |
           xcodebuild \
