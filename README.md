@@ -31,11 +31,11 @@
 
 ### Sit back and watch
 
-Two Stockfish engines play each other, live, right on your device. No server, no account, no ads.
+Two chess engines play each other, live, right on your device. No server, no account, no ads.
 
-Pick any version from **Stockfish 6 (2015) to Stockfish 19**, set the strength for each side, and watch the eval bar swing, the search go deeper and the best-move arrow change with every move.
+Pick any version from **Stockfish 6 (2015) to Stockfish 19**, or **Berserk**, **Obsidian** and **Lozza**, set the strength for each side, and watch the eval bar swing, the search go deeper and the best-move arrow change with every move.
 
-Want to follow along slowly? Turn on **step mode** and Stockfish only plays its next move when you click.
+Want to follow along slowly? In **step mode** the engine thinks ahead and only moves when you click. Or pick **You** for one side and play the engine yourself.
 
 </td>
 <td width="50%" align="center">
@@ -49,13 +49,14 @@ Want to follow along slowly? Turn on **step mode** and Stockfish only plays its 
 
 | | |
 | --- | --- |
-| ♟️ **Engine vs. engine** | Two independent Stockfish engines, compiled to WebAssembly |
-| 🕰️ **Every version** | Stockfish 19, 19 Lite, 18, 17.1, 16, 11, 10, 8 and 6. Old vs. new is fun |
-| 🎚️ **Strength per side** | Slider from Elo 1320 to full strength (skill 0 to 20 on classic engines) |
-| ⏯️ **Step mode** | Stockfish only moves when you click *Next move* or press <kbd>Enter</kbd> |
+| ♟️ **Engine vs. engine** | Two independent engines, compiled to WebAssembly |
+| 🕰️ **12 engines** | Stockfish 19, 19 Lite, 18, 17.1, 16, 11, 10, 8 and 6, plus Berserk, Obsidian and Lozza |
+| 🧑 **Play yourself** | Pick *You* for a side: drag or click the pieces, on desktop and phone |
+| 🎚️ **Strength per side** | Slider from weak to full strength (Elo, skill or level, depending on the engine) |
+| ⏯️ **Step mode** | The engine thinks ahead and plays its best move when you click *Next move* or press <kbd>Enter</kbd> |
 | 🔊 **Move sounds** | Wooden move, capture, castle and check sounds, on by default |
 | ➡️ **Best-move arrow** | See what the engine wants to play while it thinks |
-| ⏱️ **Time controls** | Fixed time per move (0.1 s to 10 s) or a real chess clock: Bullet 1+0, Blitz 3+2, Rapid 10+5 |
+| ⏱️ **Time controls** | Per move (0.1 s to 10 s or your own time), a real chess clock (1+0, 3+2, 10+5), or *Smart*: moves as soon as it's sure |
 | 📖 **Openings** | Start from move one, or from one of 36 openings from the Najdorf to the King's Gambit |
 | 📈 **Live analysis** | Eval bar, depth, nodes, speed, best line and an eval history graph |
 | ⏪ **Review** | Browse back through the game while it keeps playing, then copy the PGN |
@@ -101,8 +102,15 @@ The apps aren't signed with paid Apple or Microsoft certificates, so your system
 | Stockfish 10 | Classic | 0.4 MB | Skill 0 – 20 |
 | Stockfish 8 | Classic | 1 MB | Skill 0 – 20 |
 | Stockfish 6 | Classic | 3.2 MB | Skill 0 – 20 |
+| [Berserk](https://github.com/jhonnold/berserk) | Neural network | 38 MB | Level 0 – max |
+| [Obsidian](https://github.com/gab8192/Obsidian) | Neural network | 29 MB | Level 0 – max |
+| [Lozza 11](https://github.com/op12no2/lozza) | Neural network (JavaScript) | 0.7 MB | Level 0 – max |
 
-These are all the single-threaded browser builds of [stockfish.js](https://github.com/nmrugg/stockfish.js). Stockfish 1 to 5 never had one, and 12 to 15 only exist as multi-threaded builds, which need server headers GitHub Pages can't send.
+The Stockfish builds come from [stockfish.js](https://github.com/nmrugg/stockfish.js). Stockfish 1 to 5 never had a browser build, and 12 to 15 only exist as multi-threaded builds, which need server headers GitHub Pages can't send.
+
+Berserk and Obsidian had no browser version, so Chesswatch compiles them to WebAssembly itself: single-threaded, with input that arrives asynchronously so *stop* still works mid-search. The patches and the build script are in [`tools/wasm-engines`](tools/wasm-engines). Engines without their own strength setting get a *level*, which limits how many positions they may search per move.
+
+Closed-source engines such as Komodo Dragon or Torch can't be included, and Leela Chess Zero needs a neural-network runtime that doesn't fit this app yet.
 
 ## ⌨️ Keyboard shortcuts
 
@@ -126,7 +134,8 @@ The desktop apps wrap the same files in [Electron](https://www.electronjs.org), 
 
 ```
 web/        the app (HTML, CSS, JS, chess.js, sounds)
-web/engines every Stockfish build, one folder per version
+web/engines every engine, one folder each
+tools/      scripts that build Berserk and Obsidian for the browser
 desktop/    Electron wrapper
 ios/        Xcode project (Capacitor)
 build/      app icon
@@ -155,11 +164,13 @@ GitHub Actions builds every app on each push to `main`. To publish a release, bu
 ## 🙏 Credits
 
 - [Stockfish](https://github.com/official-stockfish/Stockfish) and [stockfish.js](https://github.com/nmrugg/stockfish.js): GPLv3
+- [Berserk](https://github.com/jhonnold/berserk) by Jay Honnold and [Obsidian](https://github.com/gab8192/Obsidian) by Gabriele Lombardo: GPLv3
+- [Lozza](https://github.com/op12no2/lozza): free to use
 - [chess.js](https://github.com/jhlywa/chess.js): BSD 2-Clause
 - Chess pieces: cburnett, CC BY-SA 3.0 (via [chessground](https://github.com/lichess-org/chessground))
 
 ## 📄 License
 
-Chesswatch ships Stockfish, so it is licensed under the [GNU General Public License v3.0](LICENSE).
+Chesswatch ships Stockfish, Berserk and Obsidian, so it is licensed under the [GNU General Public License v3.0](LICENSE).
 
 <p align="center"><sub>Made by <a href="https://github.com/EnricoZehnder">EnricoZehnder</a></sub></p>

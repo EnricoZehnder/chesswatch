@@ -9,6 +9,7 @@ export class Engine {
     this.busy = null; // promise of the running search
     this.options = {}; // UCI options the engine reported
     this.limited = false;
+    this.nodeLimit = 0; // for engines without a strength setting
     this.dead = false;
     this.worker.onmessage = (e) => {
       const line = typeof e.data === 'string' ? e.data : String(e.data);
@@ -71,6 +72,7 @@ export class Engine {
     await this.stop();
     const full = level >= 100;
     this.limited = !full;
+    this.nodeLimit = 0;
     if (this.usesElo) {
       if (full) {
         this.send('setoption name UCI_LimitStrength value false');
@@ -81,6 +83,8 @@ export class Engine {
       }
     } else if (this.options['Skill Level']) {
       this.send(`setoption name Skill Level value ${levelToSkill(level)}`);
+    } else if (!full) {
+      this.nodeLimit = levelToNodes(level);
     }
     await this.ready();
   }
@@ -142,6 +146,11 @@ export class Engine {
 export function levelToElo(level, range = [1320, 3190]) {
   const [lo, hi] = range;
   return Math.round((lo + (level / 100) * (hi - lo)) / 10) * 10;
+}
+
+// Level 0 ≈ 40 nodes per move (very weak), level 99 ≈ 900k nodes.
+export function levelToNodes(level) {
+  return Math.round(40 * Math.pow(25000, level / 100));
 }
 
 export function levelToSkill(level) {

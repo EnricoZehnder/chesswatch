@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chesswatch</title>
-<meta name="description" content="Watch Stockfish play against itself, from Stockfish 6 to Stockfish 19, live in your browser.">
+<meta name="description" content="Watch chess engines play each other, or play them yourself: Stockfish 6 to 19, Berserk, Obsidian and Lozza, live in your browser.">
 <meta name="theme-color" content="#0c110e">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Chesswatch">
-<meta property="og:description" content="Watch Stockfish play against itself, from Stockfish 6 to Stockfish 19, live in your browser.">
+<meta property="og:description" content="Watch chess engines play each other, or play them yourself: Stockfish 6 to 19, Berserk, Obsidian and Lozza, live in your browser.">
 <meta property="og:image" content="https://enricozehnder.github.io/chesswatch/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="icon.png">
@@ -78,6 +78,17 @@
           </defs>
           <line id="bestArrow" x1="0" y1="0" x2="0" y2="0" marker-end="url(#arrowhead)" visibility="hidden"></line>
         </svg>
+        <div class="overlay promo" id="promo" hidden>
+          <div class="ocard promo-card" role="dialog" aria-label="Promote to">
+            <p class="promo-title">Promote to</p>
+            <div class="promo-row">
+              <button type="button" data-p="q" aria-label="Queen"><span class="pc"></span></button>
+              <button type="button" data-p="r" aria-label="Rook"><span class="pc"></span></button>
+              <button type="button" data-p="b" aria-label="Bishop"><span class="pc"></span></button>
+              <button type="button" data-p="n" aria-label="Knight"><span class="pc"></span></button>
+            </div>
+          </div>
+        </div>
         <div class="overlay" id="loader" hidden>
           <div class="ocard"><span class="spinner" aria-hidden="true"></span><p id="loaderText">Loading engine</p><p class="osub" id="loaderSub"></p></div>
         </div>
@@ -171,7 +182,7 @@
                 <label class="flabel" for="engW">Engine</label>
                 <div class="selectwrap"><select id="engW"></select></div>
               </div>
-              <div class="sc-strength">
+              <div class="sc-strength" data-strength>
                 <div class="flabel-row"><label class="flabel" for="lvlW">Strength</label><output id="lvlOutW" for="lvlW">Max</output></div>
                 <input type="range" class="range" id="lvlW" min="0" max="100" step="1" value="100">
                 <div class="range-scale"><span id="lvlMinW">1320</span><span>Max</span></div>
@@ -187,7 +198,7 @@
                 <label class="flabel" for="engB">Engine</label>
                 <div class="selectwrap"><select id="engB"></select></div>
               </div>
-              <div class="sc-strength">
+              <div class="sc-strength" data-strength>
                 <div class="flabel-row"><label class="flabel" for="lvlB">Strength</label><output id="lvlOutB" for="lvlB">Max</output></div>
                 <input type="range" class="range" id="lvlB" min="0" max="100" step="1" value="100">
                 <div class="range-scale"><span id="lvlMinB">1320</span><span>Max</span></div>
@@ -200,6 +211,16 @@
         <div class="field">
           <div class="flabel" id="tcLabel">Time control</div>
           <div class="segmented" id="tcSeg" role="radiogroup" aria-labelledby="tcLabel"></div>
+          <div class="timeinput" id="customRow" hidden>
+            <span class="tin-label" id="customLabel">Max think time per move</span>
+            <div class="tin">
+              <input type="number" id="customMin" min="0" max="60" step="1" inputmode="numeric" aria-labelledby="customLabel customMinUnit">
+              <span id="customMinUnit">min</span>
+              <input type="number" id="customSec" min="0" max="59" step="1" inputmode="numeric" aria-labelledby="customLabel customSecUnit">
+              <span id="customSecUnit">sec</span>
+            </div>
+            <p class="tin-hint" id="customHint"></p>
+          </div>
           <p class="hint" id="tcHint" aria-live="polite"></p>
         </div>
 
@@ -213,7 +234,7 @@
             <div class="selectwrap"><select id="opening"></select></div>
           </div>
           <label class="switchrow" for="stepMode">
-            <span><strong>Step mode</strong><small>Stockfish only moves when you press Next move</small></span>
+            <span><strong>Step mode</strong><small>The engine thinks ahead and only moves when you press Next move</small></span>
             <input type="checkbox" class="switch" id="stepMode" role="switch">
           </label>
           <label class="switchrow" for="sound">
@@ -248,7 +269,7 @@
 
 <footer class="foot">
   <p><kbd>Space</kbd> play/pause · <kbd>Enter</kbd> next move · <kbd>←</kbd><kbd>→</kbd> browse · <kbd>F</kbd> flip · <kbd>N</kbd> new game · <kbd>M</kbd> sound</p>
-  <p>Stockfish (GPLv3) via stockfish.js · chess.js · pieces by cburnett (CC BY-SA 3.0) · <a href="https://github.com/EnricoZehnder/chesswatch">Source on GitHub</a></p>
+  <p>Stockfish (GPLv3) via stockfish.js · Berserk and Obsidian (GPLv3) · Lozza · chess.js · pieces by cburnett (CC BY-SA 3.0) · <a href="https://github.com/EnricoZehnder/chesswatch">Source on GitHub</a></p>
 </footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
